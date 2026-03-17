@@ -1,293 +1,331 @@
-import { useState } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import { supabase } from '../lib/supabase'
-import { computeScores } from '../lib/scoring'
 
-const STEPS = [
-  {
-    key: 'q_frequency',
-    label: '01 — Fréquence',
-    question: 'À quelle fréquence effectuez-vous cette tâche ?',
-    hint: 'Plus c\'est fréquent, plus le ROI d\'une automatisation est élevé.',
-    options: ['Quotidien', 'Hebdomadaire', 'Mensuel', 'Trimestriel', 'Ponctuel']
-  },
-  {
-    key: 'q_data_quality',
-    label: '02 — Données',
-    question: 'Comment sont les données utilisées pour cette tâche ?',
-    hint: 'Des données structurées et accessibles = une implémentation IA beaucoup plus facile.',
-    options: ['Structurées et accessibles', 'Partiellement structurées', 'Non structurées (PDF, emails…)', 'Données inexistantes']
-  },
-  {
-    key: 'q_error_cost',
-    label: '03 — Risque',
-    question: 'Quel est le coût d\'une erreur si l\'IA se trompe ?',
-    hint: 'Cela détermine le niveau de validation humaine nécessaire et donc la faisabilité.',
-    options: ['Faible — facilement corrigeable', 'Moyen — impact limité', 'Élevé — conséquences critiques']
-  },
-  {
-    key: 'q_scope',
-    label: '04 — Périmètre',
-    question: 'À qui ce cas d\'usage peut-il bénéficier ?',
-    hint: 'Plus le périmètre est large, plus l\'impact stratégique et le ROI sont élevés.',
-    options: ['Moi uniquement', 'Mon équipe Finance', 'Plusieurs départements', "Toute l'entreprise"]
-  },
-  {
-    key: 'q_existing_tool',
-    label: '05 — Outil',
-    question: 'Un outil existant pourrait-il couvrir ce besoin ?',
-    hint: 'Copilot M365 et Dust AI sont déjà disponibles chez Sunstice.',
-    options: ['Oui, Copilot M365 suffit', 'Oui, Dust AI suffit', 'Partiellement — à compléter', 'Non — développement custom']
-  }
-]
+const SYSTEM_PROMPT = `You are an AI Champion assistant at Sunstice, a SaaS supply chain software company. Your role is to help Finance team members identify and evaluate AI use cases through a friendly conversation in French.
 
-const DEPARTMENTS = ['Finance', 'Contrôle de Gestion', 'Comptabilité', 'Trésorerie', 'Autre']
-const CATEGORIES = ['Reporting', 'Comptabilité', 'Trésorerie', 'Contrats', 'Budget', 'RH / Temps', 'Transverse']
+You will guide the user through exactly 4 steps, asking questions one at a time. Be concise, encouraging, and professional.
+
+STEP 1 — CONTEXTE & IPO
+Ask the user to describe their tedious or repetitive task. Then confirm your understanding by mapping it to:
+- Input: what data/documents go in
+- Process: what the AI needs to do
+- Output: what comes out
+Ask them to confirm or correct your mapping.
+
+STEP 2 — SÉCURITÉ & RISQUE
+Ask 2-3 targeted questions about:
+- Does it involve sensitive/confidential data?
+- What happens if the AI makes a mistake?
+- Is a human available to verify the output?
+
+STEP 3 — ROI & IMPACT
+Ask about:
+- How often is this task done? (per day/week/month)
+- How long does it take manually?
+- How many people are affected?
+
+STEP 4 — OUTIL & FAISABILITÉ
+Ask about:
+- Are the data sources structured (Excel, ERP) or unstructured (PDF, emails, video)?
+- Does Sunstice already use Copilot M365 or Dust AI for anything similar?
+
+FINAL REPORT — when you have enough info from all 4 steps, generate a structured JSON report wrapped in <REPORT> tags. The JSON must have exactly this structure:
+{
+  "title": "string — concise title of the use case",
+  "description": "string — one sentence description",
+  "verdict": "Quick Win" or "Fort potentiel" or "À approfondir" or "Long-term Project",
+  "score_global": number 0-100,
+  "score_roi": number 0-100,
+  "score_feasibility": number 0-100,
+  "score_security": number 0-100,
+  "score_cost": number 0-100,
+  "score_urgency": number 0-100,
+  "tool_recommendation": "string",
+  "cost_estimate": "string",
+  "ipo_input": "string",
+  "ipo_process": "string",
+  "ipo_output": "string",
+  "critique": "string — 3-4 sentences executive analysis in French",
+  "next_steps": ["string", "string", "string"]
+}
+
+After the JSON, add a brief friendly closing message in French.
+
+IMPORTANT RULES:
+- Always respond in French
+- Ask only 1-2 questions at a time, never more
+- Be encouraging and empathetic
+- When you have enough info from all 4 steps, generate the report automatically
+- Keep responses concise (max 4-5 sentences per message)`
+
+const WELCOME = `Bonjour ! Je suis votre AI Champion assistant chez Sunstice. 👋
+
+Je suis là pour vous aider à évaluer vos idées d'automatisation IA en quelques minutes.
+
+**Commençons** : quelle est la tâche répétitive ou fastidieuse que vous aimeriez confier à l'IA ? Même une idée vague est parfaite pour commencer.`
+
+function parseReport(text) {
+  const match = text.match(/<REPORT>([\s\S]*?)<\/REPORT>/)
+  if (!match) return null
+  try { return JSON.parse(match[1].trim()) } catch { return null }
+}
+
+function cleanText(text) {
+  return text.replace(/<REPORT>[\s\S]*?<\/REPORT>/, '').trim()
+}
+
+function formatMessage(text) {
+  return text
+    .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+    .replace(/\n/g, '<br/>')
+}
 
 export default function Submit({ user }) {
-  const [phase, setPhase] = useState('intro') // intro | questions | result
-  const [step, setStep] = useState(0)
-  const [form, setForm] = useState({ title: '', description: '', department: 'Finance', category: 'Reporting', author: '' })
-  const [answers, setAnswers] = useState({})
-  const [result, setResult] = useState(null)
-  const [saving, setSaving] = useState(false)
+  const [messages, setMessages] = useState([{ role: 'assistant', content: WELCOME }])
+  const [input, setInput] = useState('')
+  const [loading, setLoading] = useState(false)
+  const [report, setReport] = useState(null)
   const [saved, setSaved] = useState(false)
+  const [saving, setSaving] = useState(false)
+  const [author, setAuthor] = useState('')
+  const [department, setDepartment] = useState('Finance')
+  const bottomRef = useRef(null)
 
-  const currentStep = STEPS[step]
-  const totalSteps = STEPS.length
+  useEffect(() => {
+    bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
+  }, [messages, loading])
 
-  const selectOption = (key, val) => setAnswers(a => ({ ...a, [key]: val }))
+  const sendMessage = async () => {
+    const text = input.trim()
+    if (!text || loading) return
+    setInput('')
+    const newMessages = [...messages, { role: 'user', content: text }]
+    setMessages(newMessages)
+    setLoading(true)
 
-  const canNextIntro = form.title.trim().length > 3 && form.author.trim().length > 0
-
-  const startQuestions = () => { if (canNextIntro) setPhase('questions') }
-
-  const nextStep = () => {
-    if (!answers[currentStep.key]) return
-    if (step < totalSteps - 1) { setStep(s => s + 1) }
-    else {
-      const scores = computeScores(answers)
-      setResult(scores)
-      setPhase('result')
+    try {
+      const res = await fetch('https://api.anthropic.com/v1/messages', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          model: 'claude-sonnet-4-20250514',
+          max_tokens: 1000,
+          system: SYSTEM_PROMPT,
+          messages: newMessages.map(m => ({ role: m.role, content: m.content }))
+        })
+      })
+      const data = await res.json()
+      const fullText = data.content?.[0]?.text || "Désolé, une erreur s'est produite."
+      const parsedReport = parseReport(fullText)
+      const displayText = cleanText(fullText)
+      setMessages(prev => [...prev, { role: 'assistant', content: displayText }])
+      if (parsedReport) setReport(parsedReport)
+    } catch {
+      setMessages(prev => [...prev, { role: 'assistant', content: "Une erreur s'est produite. Réessayez." }])
     }
+    setLoading(false)
   }
 
-  const prevStep = () => {
-    if (step === 0) setPhase('intro')
-    else setStep(s => s - 1)
+  const handleKey = (e) => {
+    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage() }
   }
 
   const saveIdea = async () => {
+    if (!report || !author.trim()) return
     setSaving(true)
-    const payload = { ...form, ...answers, ...result }
-    const { error } = await supabase.from('ideas').insert([payload])
+    const { error } = await supabase.from('ideas').insert([{
+      author: author || user,
+      department,
+      title: report.title,
+      description: report.description,
+      category: 'IA Use Case',
+      q_frequency: 'Évalué via chatbot',
+      q_data_quality: 'Évalué via chatbot',
+      q_error_cost: 'Évalué via chatbot',
+      q_scope: 'Évalué via chatbot',
+      q_existing_tool: report.tool_recommendation,
+      score_roi: report.score_roi,
+      score_feasibility: report.score_feasibility,
+      score_security: report.score_security,
+      score_cost: report.score_cost,
+      score_urgency: report.score_urgency,
+      score_global: report.score_global,
+      tool_recommendation: report.tool_recommendation,
+      cost_estimate: report.cost_estimate,
+      verdict: report.verdict,
+    }])
     setSaving(false)
     if (!error) setSaved(true)
-    else alert('Erreur lors de la sauvegarde. Vérifie ta connexion Supabase.')
+    else alert('Erreur lors de la sauvegarde.')
   }
 
-  const reset = () => {
-    setPhase('intro'); setStep(0); setForm({ title: '', description: '', department: 'Finance', category: 'Reporting', author: '' })
-    setAnswers({}); setResult(null); setSaved(false)
+  const resetAll = () => {
+    setMessages([{ role: 'assistant', content: WELCOME }])
+    setReport(null); setSaved(false); setInput(''); setAuthor('')
   }
 
-  const pct = phase === 'intro' ? 0 : phase === 'result' ? 100 : Math.round(((step) / totalSteps) * 100)
+  const VSTYLE = {
+    'Quick Win':         { bg: '#1A2E1A', color: '#7BC67E' },
+    'Fort potentiel':    { bg: '#2A1F0D', color: '#D4A85A' },
+    'À approfondir':     { bg: '#1E1E1E', color: '#888' },
+    'Long-term Project': { bg: '#0D1A2E', color: '#6AABFF' },
+  }
 
   return (
     <div style={s.wrap}>
-      {/* Progress */}
-      <div style={s.progressWrap}>
-        <div style={s.progressMeta}>
-          <span style={s.progLabel}>
-            {phase === 'intro' ? 'Contexte' : phase === 'result' ? 'Résultat' : `Question ${step + 1} / ${totalSteps}`}
-          </span>
-          <span style={s.progPct}>{pct}%</span>
-        </div>
-        <div style={s.track}><div style={{ ...s.fill, width: pct + '%' }} /></div>
-      </div>
+      <style>{`@keyframes bounce{0%,80%,100%{transform:scale(0)}40%{transform:scale(1)}}`}</style>
 
-      {/* INTRO */}
-      {phase === 'intro' && (
-        <div>
-          <div style={s.title}>Partagez votre idée IA</div>
-          <div style={s.sub}>Décrivez votre besoin, puis répondez à 5 questions pour obtenir un score automatique.</div>
-
-          <div style={s.card}>
-            <Field label="Votre prénom *">
-              <input style={s.input} value={form.author} onChange={e => setForm(f => ({ ...f, author: e.target.value }))} placeholder="Ex : Marie" />
-            </Field>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-              <Field label="Département">
-                <Select options={DEPARTMENTS} value={form.department} onChange={v => setForm(f => ({ ...f, department: v }))} />
-              </Field>
-              <Field label="Catégorie">
-                <Select options={CATEGORIES} value={form.category} onChange={v => setForm(f => ({ ...f, category: v }))} />
-              </Field>
+      {/* Chat window */}
+      <div style={s.chatBox}>
+        <div style={s.msgs}>
+          {messages.map((m, i) => (
+            <div key={i} style={{ ...s.row, justifyContent: m.role === 'user' ? 'flex-end' : 'flex-start' }}>
+              {m.role === 'assistant' && <div style={s.avatar}>AI</div>}
+              <div style={{ ...s.bubble, ...(m.role === 'user' ? s.bubbleUser : s.bubbleBot) }}
+                dangerouslySetInnerHTML={{ __html: formatMessage(m.content) }} />
             </div>
-            <Field label="Votre idée en une phrase *">
-              <input style={s.input} value={form.title} onChange={e => setForm(f => ({ ...f, title: e.target.value }))} placeholder="Ex : Automatiser la consolidation du reporting mensuel" />
-            </Field>
-            <Field label="Contexte / remarques (optionnel)">
-              <textarea style={{ ...s.input, minHeight: 80, resize: 'vertical' }} value={form.description} onChange={e => setForm(f => ({ ...f, description: e.target.value }))} placeholder="Outils actuels, contraintes, idée de solution..." />
-            </Field>
-          </div>
-
-          <button style={{ ...s.btn, opacity: canNextIntro ? 1 : 0.4 }} onClick={startQuestions} disabled={!canNextIntro}>
-            Commencer l'évaluation →
-          </button>
-        </div>
-      )}
-
-      {/* QUESTIONS */}
-      {phase === 'questions' && (
-        <div>
-          <div style={s.card}>
-            <div style={s.qLabel}>{currentStep.label}</div>
-            <div style={s.qTitle}>{currentStep.question}</div>
-            <div style={s.qHint}>{currentStep.hint}</div>
-            <div style={s.optGrid}>
-              {currentStep.options.map(opt => (
-                <button
-                  key={opt}
-                  style={{ ...s.optBtn, ...(answers[currentStep.key] === opt ? s.optSelected : {}) }}
-                  onClick={() => selectOption(currentStep.key, opt)}
-                >{opt}</button>
-              ))}
-            </div>
-          </div>
-          <div style={s.navRow}>
-            <button style={s.backBtn} onClick={prevStep}>← Retour</button>
-            <button style={{ ...s.btn, opacity: answers[currentStep.key] ? 1 : 0.4, width: 'auto', padding: '10px 28px' }}
-              onClick={nextStep} disabled={!answers[currentStep.key]}>
-              {step === totalSteps - 1 ? 'Voir le score →' : 'Suivant →'}
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* RESULT */}
-      {phase === 'result' && result && (
-        <div>
-          <div style={s.card}>
-            <div style={{ textAlign: 'center', marginBottom: '1.5rem' }}>
-              <div style={s.globalScore}>{result.score_global}</div>
-              <div style={s.globalLabel}>Score global / 100</div>
-              <div style={{ ...s.verdictBadge, ...(result.verdict === 'Quick Win' ? s.badgeGreen : result.verdict === 'Fort potentiel' ? s.badgeAmber : s.badgeGray) }}>
-                {result.verdict}
+          ))}
+          {loading && (
+            <div style={{ ...s.row, justifyContent: 'flex-start' }}>
+              <div style={s.avatar}>AI</div>
+              <div style={{ ...s.bubble, ...s.bubbleBot, display: 'flex', gap: 4, alignItems: 'center' }}>
+                {[0, 0.2, 0.4].map((d, i) => (
+                  <span key={i} style={{ width: 6, height: 6, borderRadius: '50%', background: '#D4A85A', display: 'inline-block', animation: `bounce 1.4s ${d}s infinite ease-in-out` }} />
+                ))}
               </div>
             </div>
+          )}
+          <div ref={bottomRef} />
+        </div>
 
-            <div style={s.scoresGrid}>
-              {[
-                { label: 'ROI', val: result.score_roi },
-                { label: 'Faisabilité', val: result.score_feasibility },
-                { label: 'Sécurité', val: result.score_security },
-                { label: 'Coût', val: result.score_cost },
-                { label: 'Urgence', val: result.score_urgency },
-              ].map(({ label, val }) => (
-                <div key={label} style={s.scoreItem}>
-                  <div style={s.scoreBar}>
-                    <div style={{ ...s.scoreFill, width: val + '%', background: val >= 70 ? '#D4A85A' : val >= 45 ? '#888' : '#E24B4A' }} />
-                  </div>
-                  <div style={s.scoreRow}>
-                    <span style={s.scoreLbl}>{label}</span>
-                    <span style={s.scoreVal}>{val}</span>
-                  </div>
-                </div>
-              ))}
-            </div>
+        {!report && (
+          <div style={s.inputRow}>
+            <textarea style={s.textarea} value={input} onChange={e => setInput(e.target.value)}
+              onKeyDown={handleKey} placeholder="Votre message... (Entrée pour envoyer)" rows={2} disabled={loading} />
+            <button style={{ ...s.sendBtn, opacity: input.trim() && !loading ? 1 : 0.35 }}
+              onClick={sendMessage} disabled={!input.trim() || loading}>→</button>
+          </div>
+        )}
+      </div>
 
-            <div style={s.divider} />
-
-            <div style={s.infoGrid}>
-              <InfoBlock label="Outil recommandé" value={result.tool_recommendation} />
-              <InfoBlock label="Estimation coût / délai" value={result.cost_estimate} />
+      {/* Report */}
+      {report && (
+        <div style={s.reportWrap}>
+          {/* Header */}
+          <div style={s.rCard}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12, flexWrap: 'wrap' }}>
+              <div style={{ flex: 1 }}>
+                <div style={s.rTitle}>{report.title}</div>
+                <div style={s.rDesc}>{report.description}</div>
+              </div>
+              <div style={{ textAlign: 'right', flexShrink: 0 }}>
+                <div style={s.bigScore}>{report.score_global}<span style={{ fontSize: 16, color: '#666' }}>/100</span></div>
+                <div style={{ ...s.vBadge, background: VSTYLE[report.verdict]?.bg, color: VSTYLE[report.verdict]?.color }}>{report.verdict}</div>
+              </div>
             </div>
           </div>
 
+          {/* IPO */}
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,minmax(0,1fr))', gap: 10 }}>
+            {[['INPUT', report.ipo_input], ['PROCESS', report.ipo_process], ['OUTPUT', report.ipo_output]].map(([l, v]) => (
+              <div key={l} style={s.rCard}>
+                <div style={s.miniLabel}>{l}</div>
+                <div style={{ fontSize: 12, color: '#CCC', lineHeight: 1.5 }}>{v}</div>
+              </div>
+            ))}
+          </div>
+
+          {/* Scores */}
+          <div style={s.rCard}>
+            {[['ROI', report.score_roi], ['Faisabilité', report.score_feasibility], ['Sécurité', report.score_security], ['Coût', report.score_cost], ['Urgence', report.score_urgency]].map(([l, v]) => (
+              <div key={l} style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8 }}>
+                <span style={{ fontSize: 12, color: '#666', width: 72, flexShrink: 0 }}>{l}</span>
+                <div style={{ flex: 1, height: 4, background: '#2A2A2A', borderRadius: 2, overflow: 'hidden' }}>
+                  <div style={{ height: '100%', width: v + '%', background: v >= 70 ? '#D4A85A' : v >= 45 ? '#555' : '#E24B4A', borderRadius: 2 }} />
+                </div>
+                <span style={{ fontSize: 12, fontWeight: 500, color: '#fff', width: 24, textAlign: 'right' }}>{v}</span>
+              </div>
+            ))}
+          </div>
+
+          {/* Critique */}
+          <div style={s.rCard}>
+            <div style={s.miniLabel}>Analyse IA</div>
+            <div style={{ fontSize: 13, color: '#AAA', lineHeight: 1.7 }}>{report.critique}</div>
+          </div>
+
+          {/* Next steps */}
+          <div style={s.rCard}>
+            <div style={s.miniLabel}>Prochaines étapes</div>
+            {report.next_steps?.map((step, i) => (
+              <div key={i} style={{ display: 'flex', gap: 8, alignItems: 'flex-start', marginBottom: 8 }}>
+                <span style={{ width: 5, height: 5, borderRadius: '50%', background: '#D4A85A', flexShrink: 0, marginTop: 6 }} />
+                <span style={{ fontSize: 13, color: '#AAA', lineHeight: 1.5 }}>{step}</span>
+              </div>
+            ))}
+          </div>
+
+          {/* Tool + cost */}
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+            {[['Outil recommandé', report.tool_recommendation], ['Estimation', report.cost_estimate]].map(([l, v]) => (
+              <div key={l} style={s.rCard}>
+                <div style={s.miniLabel}>{l}</div>
+                <div style={{ fontSize: 13, color: '#D4A85A', fontWeight: 500 }}>{v}</div>
+              </div>
+            ))}
+          </div>
+
+          {/* Save */}
           {!saved ? (
-            <button style={s.btn} onClick={saveIdea} disabled={saving}>
-              {saving ? 'Sauvegarde...' : 'Enregistrer cette idée →'}
-            </button>
+            <div style={s.rCard}>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 10 }}>
+                <div>
+                  <label style={s.miniLabel}>Votre prénom *</label>
+                  <input style={s.inp} value={author} onChange={e => setAuthor(e.target.value)} placeholder="Ex : Marie" />
+                </div>
+                <div>
+                  <label style={s.miniLabel}>Département</label>
+                  <select style={s.inp} value={department} onChange={e => setDepartment(e.target.value)}>
+                    {['Finance', 'Contrôle de Gestion', 'Comptabilité', 'Trésorerie', 'Autre'].map(d => <option key={d}>{d}</option>)}
+                  </select>
+                </div>
+              </div>
+              <button style={{ ...s.saveBtn, opacity: author.trim() ? 1 : 0.4 }} onClick={saveIdea} disabled={!author.trim() || saving}>
+                {saving ? 'Sauvegarde...' : 'Enregistrer dans le dashboard →'}
+              </button>
+            </div>
           ) : (
-            <div style={s.successBox}>
-              <div style={s.successIcon}>✓</div>
-              <div style={s.successText}>Idée enregistrée avec succès !</div>
-              <button style={s.linkBtn} onClick={reset}>Soumettre une autre idée</button>
+            <div style={{ ...s.rCard, textAlign: 'center', padding: '1.5rem' }}>
+              <div style={{ width: 40, height: 40, background: '#1A2E1A', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 10px', color: '#7BC67E', fontSize: 18 }}>✓</div>
+              <div style={{ fontSize: 15, fontWeight: 500, color: '#fff', marginBottom: 8 }}>Idée enregistrée !</div>
+              <button style={{ fontSize: 13, color: '#D4A85A', background: 'none', border: 'none', cursor: 'pointer', textDecoration: 'underline' }} onClick={resetAll}>Évaluer une autre idée</button>
             </div>
           )}
-          <button style={s.backBtn2} onClick={() => { setPhase('questions'); setStep(totalSteps - 1) }}>← Modifier mes réponses</button>
         </div>
       )}
-    </div>
-  )
-}
-
-function Field({ label, children }) {
-  return (
-    <div style={{ marginBottom: '1rem' }}>
-      <label style={{ display: 'block', fontSize: 11, fontWeight: 500, color: '#888', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 6 }}>{label}</label>
-      {children}
-    </div>
-  )
-}
-
-function Select({ options, value, onChange }) {
-  return (
-    <select style={{ fontFamily: "'Inter',sans-serif", fontSize: 14, padding: '10px 14px', background: '#1E1E1E', border: '0.5px solid #333', borderRadius: 8, color: '#fff', width: '100%', appearance: 'none' }}
-      value={value} onChange={e => onChange(e.target.value)}>
-      {options.map(o => <option key={o} value={o}>{o}</option>)}
-    </select>
-  )
-}
-
-function InfoBlock({ label, value }) {
-  return (
-    <div style={{ background: '#1A1A1A', border: '0.5px solid #2A2A2A', borderRadius: 8, padding: '0.75rem 1rem' }}>
-      <div style={{ fontSize: 10, color: '#666', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 4 }}>{label}</div>
-      <div style={{ fontSize: 13, color: '#D4A85A', fontWeight: 500 }}>{value}</div>
     </div>
   )
 }
 
 const s = {
-  wrap: { maxWidth: 640, margin: '0 auto', padding: '2rem 1.5rem', fontFamily: "'Inter', sans-serif" },
-  progressWrap: { marginBottom: '2rem' },
-  progressMeta: { display: 'flex', justifyContent: 'space-between', marginBottom: 6 },
-  progLabel: { fontSize: 12, color: '#666' },
-  progPct: { fontSize: 12, color: '#D4A85A' },
-  track: { height: 2, background: '#2A2A2A', borderRadius: 2 },
-  fill: { height: '100%', background: '#D4A85A', borderRadius: 2, transition: 'width 0.4s ease' },
-  title: { fontFamily: "'Syne',sans-serif", fontSize: 22, fontWeight: 700, color: '#fff', marginBottom: 4 },
-  sub: { fontSize: 13, color: '#666', marginBottom: '1.5rem', lineHeight: 1.6 },
-  card: { background: '#141414', border: '0.5px solid #2A2A2A', borderRadius: 12, padding: '1.5rem', marginBottom: '1.25rem' },
-  input: { fontFamily: "'Inter',sans-serif", fontSize: 14, padding: '10px 14px', background: '#1E1E1E', border: '0.5px solid #333', borderRadius: 8, color: '#fff', width: '100%', outline: 'none' },
-  btn: { width: '100%', fontFamily: "'Syne',sans-serif", fontSize: 15, fontWeight: 600, padding: 14, background: '#D4A85A', color: '#0D0D0D', border: 'none', borderRadius: 8, cursor: 'pointer' },
-  qLabel: { fontSize: 11, fontWeight: 500, color: '#666', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 8 },
-  qTitle: { fontSize: 17, fontWeight: 500, color: '#fff', marginBottom: 6, lineHeight: 1.4 },
-  qHint: { fontSize: 13, color: '#666', marginBottom: '1.25rem', lineHeight: 1.5 },
-  optGrid: { display: 'flex', flexDirection: 'column', gap: 8 },
-  optBtn: { fontFamily: "'Inter',sans-serif", fontSize: 14, padding: '12px 16px', background: '#1E1E1E', border: '0.5px solid #333', borderRadius: 8, color: '#aaa', cursor: 'pointer', textAlign: 'left', transition: 'all 0.15s' },
-  optSelected: { background: '#2A1F0D', border: '0.5px solid #D4A85A', color: '#D4A85A' },
-  navRow: { display: 'flex', justifyContent: 'space-between', alignItems: 'center' },
-  backBtn: { fontFamily: "'Inter',sans-serif", fontSize: 13, color: '#666', background: 'none', border: 'none', cursor: 'pointer', padding: 0 },
-  backBtn2: { fontFamily: "'Inter',sans-serif", fontSize: 12, color: '#666', background: 'none', border: 'none', cursor: 'pointer', marginTop: 12, display: 'block' },
-  globalScore: { fontFamily: "'Syne',sans-serif", fontSize: 56, fontWeight: 700, color: '#D4A85A', lineHeight: 1 },
-  globalLabel: { fontSize: 12, color: '#666', textTransform: 'uppercase', letterSpacing: '0.06em', marginTop: 4 },
-  verdictBadge: { display: 'inline-block', fontSize: 12, fontWeight: 500, padding: '4px 14px', borderRadius: 20, marginTop: 10 },
-  badgeGreen: { background: '#1A2E1A', color: '#7BC67E' },
-  badgeAmber: { background: '#2A1F0D', color: '#D4A85A' },
-  badgeGray: { background: '#1E1E1E', color: '#888' },
-  scoresGrid: { display: 'flex', flexDirection: 'column', gap: 10, marginTop: '1rem' },
-  scoreItem: {},
-  scoreBar: { height: 4, background: '#2A2A2A', borderRadius: 2, marginBottom: 4, overflow: 'hidden' },
-  scoreFill: { height: '100%', borderRadius: 2, transition: 'width 0.6s ease' },
-  scoreRow: { display: 'flex', justifyContent: 'space-between' },
-  scoreLbl: { fontSize: 12, color: '#888' },
-  scoreVal: { fontSize: 12, fontWeight: 500, color: '#fff' },
-  divider: { height: '0.5px', background: '#2A2A2A', margin: '1.25rem 0' },
-  infoGrid: { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 },
-  successBox: { textAlign: 'center', background: '#141414', border: '0.5px solid #2A2A2A', borderRadius: 12, padding: '1.5rem', marginBottom: 12 },
-  successIcon: { width: 44, height: 44, background: '#1A2E1A', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 10px', color: '#7BC67E', fontSize: 20 },
-  successText: { fontSize: 15, fontWeight: 500, color: '#fff', marginBottom: 8 },
-  linkBtn: { fontSize: 13, color: '#D4A85A', background: 'none', border: 'none', cursor: 'pointer', textDecoration: 'underline' },
+  wrap: { maxWidth: 700, margin: '0 auto', padding: '1.5rem', fontFamily: "'Inter',sans-serif" },
+  chatBox: { background: '#141414', border: '0.5px solid #2A2A2A', borderRadius: 12, overflow: 'hidden', marginBottom: '1.25rem' },
+  msgs: { padding: '1.25rem', display: 'flex', flexDirection: 'column', gap: 12, maxHeight: 460, overflowY: 'auto' },
+  row: { display: 'flex', alignItems: 'flex-start', gap: 8 },
+  avatar: { width: 26, height: 26, borderRadius: '50%', background: '#2A1F0D', color: '#D4A85A', fontSize: 9, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, marginTop: 2 },
+  bubble: { maxWidth: '82%', padding: '10px 14px', borderRadius: 12, fontSize: 14, lineHeight: 1.6 },
+  bubbleBot: { background: '#1E1E1E', color: '#CCC', borderBottomLeftRadius: 4 },
+  bubbleUser: { background: '#2A1F0D', color: '#D4A85A', borderBottomRightRadius: 4 },
+  inputRow: { display: 'flex', borderTop: '0.5px solid #2A2A2A' },
+  textarea: { flex: 1, fontFamily: "'Inter',sans-serif", fontSize: 14, padding: '12px 16px', background: '#0D0D0D', border: 'none', color: '#fff', outline: 'none', resize: 'none', lineHeight: 1.5 },
+  sendBtn: { width: 50, background: '#D4A85A', border: 'none', color: '#0D0D0D', fontSize: 20, fontWeight: 700, cursor: 'pointer' },
+  reportWrap: { display: 'flex', flexDirection: 'column', gap: 10 },
+  rCard: { background: '#141414', border: '0.5px solid #2A2A2A', borderRadius: 10, padding: '1.25rem' },
+  rTitle: { fontFamily: "'Syne',sans-serif", fontSize: 17, fontWeight: 700, color: '#fff', marginBottom: 4 },
+  rDesc: { fontSize: 13, color: '#888', lineHeight: 1.5 },
+  bigScore: { fontFamily: "'Syne',sans-serif", fontSize: 38, fontWeight: 700, color: '#D4A85A', lineHeight: 1 },
+  vBadge: { fontSize: 11, fontWeight: 500, padding: '4px 12px', borderRadius: 20, display: 'inline-block', marginTop: 6 },
+  miniLabel: { fontSize: 10, color: '#555', textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 8 },
+  inp: { fontFamily: "'Inter',sans-serif", fontSize: 13, padding: '9px 12px', background: '#1E1E1E', border: '0.5px solid #333', borderRadius: 8, color: '#fff', width: '100%', appearance: 'none' },
+  saveBtn: { width: '100%', fontFamily: "'Syne',sans-serif", fontSize: 14, fontWeight: 600, padding: 12, background: '#D4A85A', color: '#0D0D0D', border: 'none', borderRadius: 8, cursor: 'pointer' },
 }
