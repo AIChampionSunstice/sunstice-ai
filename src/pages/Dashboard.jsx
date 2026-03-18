@@ -24,7 +24,7 @@ export default function Dashboard() {
   const [loading, setLoading] = useState(true)
   const [filter, setFilter] = useState('all')
   const [selected, setSelected] = useState(null)
-  const [deptFilter, setDeptFilter] = useState('Tous')
+  const [deptFilter, setDeptFilter] = useState('All')
 
   useEffect(() => { fetchIdeas() }, [])
 
@@ -35,10 +35,10 @@ export default function Dashboard() {
     setLoading(false)
   }
 
-  const departments = ['Tous', ...new Set(ideas.map(i => i.department))]
+  const departments = ['All', ...new Set(ideas.map(i => i.department))]
 
   const filtered = ideas.filter(idea => {
-    const deptOk = deptFilter === 'Tous' || idea.department === deptFilter
+    const deptOk = deptFilter === 'All' || idea.department === deptFilter
     if (!deptOk) return false
     switch (filter) {
       case 'quick_win':     return idea.verdict === 'Quick Win'
