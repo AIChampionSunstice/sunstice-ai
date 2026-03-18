@@ -10,13 +10,13 @@ const VERDICT_STYLE = {
 
 const FILTER_OPTS = [
   { key: 'all',           label: 'Toutes' },
-  { key: 'quick_win',     label: '⚡ Quick Wins' },
-  { key: 'company_wide',  label: '🌐 Toute l\'entreprise' },
+  { key: 'quick_win',     label: 'Quick Wins' },
+  { key: 'company_wide',  label: 'Toute l\'entreprise' },
   { key: 'copilot',       label: 'Copilot M365' },
   { key: 'dust',          label: 'Dust AI' },
   { key: 'custom',        label: 'Dev custom' },
-  { key: 'high_security', label: '🔒 Haute sécurité' },
-  { key: 'low_cost',      label: '💰 Faible coût' },
+  { key: 'high_security', label: 'Haute sécurité' },
+  { key: 'low_cost',      label: 'Faible coût' },
 ]
 
 export default function Dashboard() {
