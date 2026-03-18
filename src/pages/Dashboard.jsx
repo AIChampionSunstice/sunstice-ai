@@ -177,15 +177,15 @@ export default function Dashboard() {
                         </div>
                       ))}
                       <div style={s.infoBlock}>
-                        <div style={s.infoLbl}>Outil recommandé</div>
+                        <div style={s.infoLbl}>Recommended tool</div>
                         <div style={s.infoVal}>{idea.tool_recommendation}</div>
                       </div>
                       <div style={s.infoBlock}>
-                        <div style={s.infoLbl}>Estimation</div>
+                        <div style={s.infoLbl}>Estimate</div>
                         <div style={s.infoVal}>{idea.cost_estimate}</div>
                       </div>
                       <div style={s.infoBlock}>
-                        <div style={s.infoLbl}>Soumis par</div>
+                        <div style={s.infoLbl}>Submitted by</div>
                         <div style={s.infoVal}>{idea.author} — {idea.department}</div>
                       </div>
                     </div>
