@@ -61,7 +61,7 @@ IMPORTANT RULES:
 const WELCOME = `Hello! 
 I'm here to help you evaluate your AI automation ideas in just a few minutes.
 
-**Let's get started**: What repetitive or tedious task would you like to hand off to AI? Even a rough idea is a great place to start.`
+So what repetitive or tedious task would you like to hand off to AI? Even a rough idea is a great place to start.`
 
 function parseReport(text) {
   const match = text.match(/<REPORT>([\s\S]*?)<\/REPORT>/)
