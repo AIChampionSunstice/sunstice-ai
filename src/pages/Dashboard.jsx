@@ -9,14 +9,14 @@ const VERDICT_STYLE = {
 }
 
 const FILTER_OPTS = [
-  { key: 'all',           label: 'Toutes' },
+  { key: 'all',           label: 'All' },
   { key: 'quick_win',     label: 'Quick Wins' },
-  { key: 'company_wide',  label: 'Toute l\'entreprise' },
+  { key: 'company_wide',  label: 'whole company' },
   { key: 'copilot',       label: 'Copilot M365' },
   { key: 'dust',          label: 'Dust AI' },
   { key: 'custom',        label: 'Dev custom' },
-  { key: 'high_security', label: 'Haute sécurité' },
-  { key: 'low_cost',      label: 'Faible coût' },
+  { key: 'high_security', label: 'High Security' },
+  { key: 'low_cost',      label: 'low cost' },
 ]
 
 export default function Dashboard() {
@@ -42,7 +42,7 @@ export default function Dashboard() {
     if (!deptOk) return false
     switch (filter) {
       case 'quick_win':     return idea.verdict === 'Quick Win'
-      case 'company_wide':  return idea.q_scope === "Toute l'entreprise" || idea.q_scope === 'Plusieurs départements'
+      case 'company_wide':  return idea.q_scope === "whole company" || idea.q_scope === 'Plusieurs départements'
       case 'copilot':       return idea.tool_recommendation.includes('Copilot')
       case 'dust':          return idea.tool_recommendation.includes('Dust')
       case 'custom':        return idea.tool_recommendation.includes('custom')
@@ -73,17 +73,17 @@ export default function Dashboard() {
 
       {/* Stats */}
       <div style={s.statsRow}>
-        <StatCard val={stats.total} label="Idées soumises" />
+        <StatCard val={stats.total} label="Ideas submitted" />
         <StatCard val={stats.quickWins} label="Quick Wins" accent />
-        <StatCard val={stats.avgScore} label="Score moyen" />
-        <StatCard val={stats.copilot} label="Via Copilot" />
-        <StatCard val={stats.dust} label="Via Dust AI" />
+        <StatCard val={stats.avgScore} label="Average score" />
+        <StatCard val={stats.copilot} label="By Copilot" />
+        <StatCard val={stats.dust} label="By Dust AI" />
       </div>
 
       {/* Chart */}
       {catData.length > 0 && (
         <div style={s.chartCard}>
-          <div style={s.sectionLabel}>Idées par catégorie</div>
+          <div style={s.sectionLabel}>Ideas by category</div>
           <div style={{ height: 140 }}>
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={catData} layout="vertical" margin={{ left: 0, right: 20, top: 0, bottom: 0 }}>
