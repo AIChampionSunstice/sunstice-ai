@@ -200,7 +200,7 @@ export default function Submit({ user }) {
         {!report && (
           <div style={s.inputRow}>
             <textarea style={s.textarea} value={input} onChange={e => setInput(e.target.value)}
-              onKeyDown={handleKey} placeholder="Votre message... (Entrée pour envoyer)" rows={2} disabled={loading} />
+              onKeyDown={handleKey} placeholder="Your message... (Enter to send)" rows={2} disabled={loading} />
             <button style={{ ...s.sendBtn, opacity: input.trim() && !loading ? 1 : 0.35 }}
               onClick={sendMessage} disabled={!input.trim() || loading}>→</button>
           </div>
