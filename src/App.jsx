@@ -18,7 +18,7 @@ export default function App() {
         <div style={styles.logo}>Finance AI Hub</div>
         <div style={styles.tabs}>
           <button style={{ ...styles.tabBtn, ...(tab === 'submit' ? styles.tabActive : {}) }} onClick={() => setTab('submit')}>
-            Soumettre une idée
+            Submit an idea
           </button>
           <button style={{ ...styles.tabBtn, ...(tab === 'dashboard' ? styles.tabActive : {}) }} onClick={() => setTab('dashboard')}>
             Dashboard
