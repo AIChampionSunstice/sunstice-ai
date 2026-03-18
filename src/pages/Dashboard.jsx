@@ -151,10 +151,10 @@ export default function Dashboard() {
                       <ResponsiveContainer width="100%" height="100%">
                         <RadarChart data={[
                           { subject: 'ROI', val: idea.score_roi },
-                          { subject: 'Faisabilité', val: idea.score_feasibility },
-                          { subject: 'Sécurité', val: idea.score_security },
-                          { subject: 'Coût', val: idea.score_cost },
-                          { subject: 'Urgence', val: idea.score_urgency },
+                          { subject: 'Feasibility', val: idea.score_feasibility },
+                          { subject: 'Security', val: idea.score_security },
+                          { subject: 'Cost', val: idea.score_cost },
+                          { subject: 'Urgency', val: idea.score_urgency },
                         ]}>
                           <PolarGrid stroke="#2A2A2A" />
                           <PolarAngleAxis dataKey="subject" tick={{ fontSize: 10, fill: '#666', fontFamily: 'Inter' }} />
