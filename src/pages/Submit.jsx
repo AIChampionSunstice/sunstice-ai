@@ -58,11 +58,10 @@ IMPORTANT RULES:
 - When you have enough info from all 4 steps, generate the report automatically
 - Keep responses concise (max 4-5 sentences per message)`
 
-const WELCOME = `Bonjour ! Je suis votre AI Champion assistant chez Sunstice. 👋
+const WELCOME = `Hello! 
+I'm here to help you evaluate your AI automation ideas in just a few minutes.
 
-Je suis là pour vous aider à évaluer vos idées d'automatisation IA en quelques minutes.
-
-**Commençons** : quelle est la tâche répétitive ou fastidieuse que vous aimeriez confier à l'IA ? Même une idée vague est parfaite pour commencer.`
+**Let's get started**: What repetitive or tedious task would you like to hand off to AI? Even a rough idea is a great place to start.`
 
 function parseReport(text) {
   const match = text.match(/<REPORT>([\s\S]*?)<\/REPORT>/)
