@@ -165,10 +165,10 @@ export default function Dashboard() {
                     <div style={s.detailInfo}>
                       {[
                         ['ROI', idea.score_roi],
-                        ['Faisabilité', idea.score_feasibility],
-                        ['Sécurité', idea.score_security],
-                        ['Coût', idea.score_cost],
-                        ['Urgence', idea.score_urgency],
+                        ['Feasibility', idea.score_feasibility],
+                        ['Security', idea.score_security],
+                        ['Cost', idea.score_cost],
+                        ['Urgency', idea.score_urgency],
                       ].map(([label, val]) => (
                         <div key={label} style={s.scoreRow}>
                           <span style={s.scoreLbl}>{label}</span>
