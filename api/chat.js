@@ -26,11 +26,3 @@ export default async function handler(req, res) {
     return res.status(500).json({ error: 'Internal server error' })
   }
 }
-```
-
-4. Commit
-5. Dans **Vercel → Settings → Environment Variables** ajoute `GROQ_API_KEY` avec ta clé Groq
-
-Et dans `Submit.jsx` change l'URL :
-```
-https://api.anthropic.com/v1/messages  →  /api/chat
