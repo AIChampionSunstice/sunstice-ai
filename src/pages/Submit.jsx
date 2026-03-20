@@ -1,67 +1,78 @@
 import { useState, useRef, useEffect } from 'react'
 import { supabase } from '../lib/supabase'
 
-const SYSTEM_PROMPT = `You are an AI Champion assistant at Sunstice, a SaaS supply chain software company. Your role is to help Finance team members identify and evaluate AI use cases through a friendly conversation in French.
+const SYSTEM_PROMPT = `You are an AI Champion assistant at Sunstice, a SaaS supply chain software company. Your role is to help Finance team members identify and evaluate AI use cases through a conversation in English.
 
-You will guide the user through exactly 4 steps, asking questions one at a time. Be concise, encouraging, and professional.
+You will guide the user through exactly 4 steps, asking questions one at a time. Be concise and professional. No emojis, no excessive politeness.
 
-STEP 1 — CONTEXTE & IPO
-Ask the user to describe their tedious or repetitive task. Then confirm your understanding by mapping it to:
-- Input: what data/documents go in
-- Process: what the AI needs to do
-- Output: what comes out
-Ask them to confirm or correct your mapping.
+STEP 1 — CONTEXT & IPO
+Ask the user to describe their repetitive task. Then map it to Input / Process / Output and ask them to confirm or correct.
 
-STEP 2 — SÉCURITÉ & RISQUE
-Ask 2-3 targeted questions about:
-- Does it involve sensitive/confidential data?
-- What happens if the AI makes a mistake?
-- Is a human available to verify the output?
+STEP 2 — SECURITY & RISK
+Ask 2 questions: is the data confidential or sensitive? What happens if the AI makes a mistake?
 
 STEP 3 — ROI & IMPACT
-Ask about:
-- How often is this task done? (per day/week/month)
-- How long does it take manually?
-- How many people are affected?
+Ask about frequency, time spent manually, and how many people are affected.
 
-STEP 4 — OUTIL & FAISABILITÉ
-Ask about:
-- Are the data sources structured (Excel, ERP) or unstructured (PDF, emails, video)?
-- Does Sunstice already use Copilot M365 or Dust AI for anything similar?
+STEP 4 — TOOL & FEASIBILITY
+Ask these 3 questions:
+1. Are the data sources structured (Excel, ERP, database) or unstructured (PDF, emails, video, audio)?
+2. Does the task involve mainly text, documents, or conversation — or does it require browsing, clicking, or interacting with software interfaces?
+3. Does the task need real-time web search or up-to-date external information?
 
-FINAL REPORT — when you have enough info from all 4 steps, generate a structured JSON report wrapped in <REPORT> tags. The JSON must have exactly this structure:
+Then based on ALL answers, determine the tool using these rules:
+
+DUST AI if: unstructured data (PDFs, emails, docs), document analysis, summarization, Q&A on internal knowledge, no need for real-time web or complex system interaction.
+
+COPILOT M365 if: task lives inside Microsoft 365 (Word, Excel, Outlook, Teams, PowerPoint), meeting summaries, email drafting, Excel automation, document generation, data from SharePoint or OneDrive.
+
+DUST AI + COPILOT M365 if: task involves both document analysis AND Microsoft 365 workflows.
+
+CUSTOM DEVELOPMENT if: complex processing (APIs, ERP integration, multi-system automation), custom logic or calculations, real-time data, automated reporting pipelines not covered by Dust or Copilot.
+
+NO-CODE (Zapier/Make) if: mainly connecting two existing tools and triggering actions automatically, no AI reasoning needed.
+
+Always explain briefly WHY you recommend a specific tool.
+
+FINAL REPORT — when you have enough info from all 4 steps, generate a JSON report in <REPORT> tags with exactly this structure:
 {
-  "title": "string — concise title of the use case",
-  "description": "string — one sentence description",
-  "verdict": "Quick Win" or "Fort potentiel" or "À approfondir" or "Long-term Project",
-  "score_global": number 0-100,
-  "score_roi": number 0-100,
-  "score_feasibility": number 0-100,
-  "score_security": number 0-100,
-  "score_cost": number 0-100,
-  "score_urgency": number 0-100,
-  "tool_recommendation": "string",
-  "cost_estimate": "string",
-  "ipo_input": "string",
-  "ipo_process": "string",
-  "ipo_output": "string",
-  "critique": "string — 3-4 sentences executive analysis in French",
-  "next_steps": ["string", "string", "string"]
+  "title": "concise title",
+  "description": "one sentence",
+  "verdict": "Quick Win" or "Fort potentiel" or "A approfondir" or "Long-term Project",
+  "score_global": 0-100,
+  "score_roi": 0-100,
+  "score_feasibility": 0-100,
+  "score_security": 0-100,
+  "score_cost": 0-100,
+  "score_urgency": 0-100,
+  "tool_recommendation": "Dust AI" or "Microsoft Copilot M365" or "Dust AI + Copilot M365" or "Custom Development" or "No-code (Zapier/Make)",
+  "cost_estimate": "e.g. < 1 week / near zero cost",
+  "ipo_input": "description",
+  "ipo_process": "description",
+  "ipo_output": "description",
+  "critique": "3-4 sentences analysis in English",
+  "next_steps": ["step1", "step2", "step3"]
 }
 
-After the JSON, add a brief friendly closing message in French.
+SCORING RULES:
+- score_roi: daily=90, weekly=70, monthly=50, quarterly=30, one-off=15. Add 20 if whole company, add 10 if multiple teams.
+- score_feasibility: structured data=80, partial=55, unstructured=35. Add 15 if Copilot or Dust covers it. Subtract 20 if requires complex custom dev.
+- score_security: low error cost=90, medium=60, high/critical=25.
+- score_cost: Copilot/Dust=85, no-code=75, light custom=50, full custom=20.
+- score_urgency: same base as ROI weighted by people affected.
+- score_global: roi*0.30 + feasibility*0.25 + security*0.15 + cost*0.15 + urgency*0.15
 
-IMPORTANT RULES:
+RULES:
 - Always respond in English
-- Ask only 1-2 questions at a time, never more
-- Be encouraging and empathetic
-- When you have enough info from all 4 steps, generate the report automatically
-- Keep responses concise (max 4-5 sentences per message)`
+- Max 1-2 questions at a time
+- No emojis
+- Generate the report automatically when you have enough info`
 
-const WELCOME = `Hello! 
-I'm here to help you evaluate your AI automation ideas in just a few minutes.
+const WELCOME = `Hi, I'm your AI Champion at Sunstice.
 
-So what repetitive or tedious task would you like to hand off to AI? Even a rough idea is a great place to start.`
+I'm here to help you evaluate your automation ideas — it takes about 5 minutes.
+
+To get started: what's a task you do regularly that you'd love to hand off to AI?`
 
 function parseReport(text) {
   const match = text.match(/<REPORT>([\s\S]*?)<\/REPORT>/)
@@ -117,13 +128,13 @@ export default function Submit({ user }) {
         })
       })
       const data = await res.json()
-      const fullText = data.content?.[0]?.text || "Désolé, une erreur s'est produite."
+      const fullText = data.content?.[0]?.text || "Sorry, an error occurred."
       const parsedReport = parseReport(fullText)
       const displayText = cleanText(fullText)
       setMessages(prev => [...prev, { role: 'assistant', content: displayText }])
       if (parsedReport) setReport(parsedReport)
     } catch {
-      setMessages(prev => [...prev, { role: 'assistant', content: "Une erreur s'est produite. Réessayez." }])
+      setMessages(prev => [...prev, { role: 'assistant', content: "An error occurred. Please try again." }])
     }
     setLoading(false)
   }
@@ -141,10 +152,10 @@ export default function Submit({ user }) {
       title: report.title,
       description: report.description,
       category: 'IA Use Case',
-      q_frequency: 'Évalué via chatbot',
-      q_data_quality: 'Évalué via chatbot',
-      q_error_cost: 'Évalué via chatbot',
-      q_scope: 'Évalué via chatbot',
+      q_frequency: 'Evaluated via chatbot',
+      q_data_quality: 'Evaluated via chatbot',
+      q_error_cost: 'Evaluated via chatbot',
+      q_scope: 'Evaluated via chatbot',
       q_existing_tool: report.tool_recommendation,
       score_roi: report.score_roi,
       score_feasibility: report.score_feasibility,
@@ -158,7 +169,7 @@ export default function Submit({ user }) {
     }])
     setSaving(false)
     if (!error) setSaved(true)
-    else alert('Erreur lors de la sauvegarde.')
+    else alert('Error while saving.')
   }
 
   const resetAll = () => {
@@ -169,6 +180,7 @@ export default function Submit({ user }) {
   const VSTYLE = {
     'Quick Win':         { bg: '#1A2E1A', color: '#7BC67E' },
     'Fort potentiel':    { bg: '#2A1F0D', color: '#D4A85A' },
+    'A approfondir':     { bg: '#1E1E1E', color: '#888' },
     'À approfondir':     { bg: '#1E1E1E', color: '#888' },
     'Long-term Project': { bg: '#0D1A2E', color: '#6AABFF' },
   }
@@ -177,7 +189,6 @@ export default function Submit({ user }) {
     <div style={s.wrap}>
       <style>{`@keyframes bounce{0%,80%,100%{transform:scale(0)}40%{transform:scale(1)}}`}</style>
 
-      {/* Chat window */}
       <div style={s.chatBox}>
         <div style={s.msgs}>
           {messages.map((m, i) => (
@@ -210,10 +221,8 @@ export default function Submit({ user }) {
         )}
       </div>
 
-      {/* Report */}
       {report && (
         <div style={s.reportWrap}>
-          {/* Header */}
           <div style={s.rCard}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12, flexWrap: 'wrap' }}>
               <div style={{ flex: 1 }}>
@@ -222,12 +231,11 @@ export default function Submit({ user }) {
               </div>
               <div style={{ textAlign: 'right', flexShrink: 0 }}>
                 <div style={s.bigScore}>{report.score_global}<span style={{ fontSize: 16, color: '#666' }}>/100</span></div>
-                <div style={{ ...s.vBadge, background: VSTYLE[report.verdict]?.bg, color: VSTYLE[report.verdict]?.color }}>{report.verdict}</div>
+                <div style={{ ...s.vBadge, background: VSTYLE[report.verdict]?.bg || '#1E1E1E', color: VSTYLE[report.verdict]?.color || '#888' }}>{report.verdict}</div>
               </div>
             </div>
           </div>
 
-          {/* IPO */}
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,minmax(0,1fr))', gap: 10 }}>
             {[['INPUT', report.ipo_input], ['PROCESS', report.ipo_process], ['OUTPUT', report.ipo_output]].map(([l, v]) => (
               <div key={l} style={s.rCard}>
@@ -237,9 +245,8 @@ export default function Submit({ user }) {
             ))}
           </div>
 
-          {/* Scores */}
           <div style={s.rCard}>
-            {[['ROI', report.score_roi], ['Faisabilité', report.score_feasibility], ['Sécurité', report.score_security], ['Coût', report.score_cost], ['Urgence', report.score_urgency]].map(([l, v]) => (
+            {[['ROI', report.score_roi], ['Feasibility', report.score_feasibility], ['Security', report.score_security], ['Cost', report.score_cost], ['Urgency', report.score_urgency]].map(([l, v]) => (
               <div key={l} style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8 }}>
                 <span style={{ fontSize: 12, color: '#666', width: 72, flexShrink: 0 }}>{l}</span>
                 <div style={{ flex: 1, height: 4, background: '#2A2A2A', borderRadius: 2, overflow: 'hidden' }}>
@@ -250,15 +257,13 @@ export default function Submit({ user }) {
             ))}
           </div>
 
-          {/* Critique */}
           <div style={s.rCard}>
-            <div style={s.miniLabel}>Analyse IA</div>
+            <div style={s.miniLabel}>Analysis</div>
             <div style={{ fontSize: 13, color: '#AAA', lineHeight: 1.7 }}>{report.critique}</div>
           </div>
 
-          {/* Next steps */}
           <div style={s.rCard}>
-            <div style={s.miniLabel}>Prochaines étapes</div>
+            <div style={s.miniLabel}>Next steps</div>
             {report.next_steps?.map((step, i) => (
               <div key={i} style={{ display: 'flex', gap: 8, alignItems: 'flex-start', marginBottom: 8 }}>
                 <span style={{ width: 5, height: 5, borderRadius: '50%', background: '#D4A85A', flexShrink: 0, marginTop: 6 }} />
@@ -267,9 +272,8 @@ export default function Submit({ user }) {
             ))}
           </div>
 
-          {/* Tool + cost */}
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
-            {[['Outil recommandé', report.tool_recommendation], ['Estimation', report.cost_estimate]].map(([l, v]) => (
+            {[['Recommended tool', report.tool_recommendation], ['Estimate', report.cost_estimate]].map(([l, v]) => (
               <div key={l} style={s.rCard}>
                 <div style={s.miniLabel}>{l}</div>
                 <div style={{ fontSize: 13, color: '#D4A85A', fontWeight: 500 }}>{v}</div>
@@ -277,30 +281,29 @@ export default function Submit({ user }) {
             ))}
           </div>
 
-          {/* Save */}
           {!saved ? (
             <div style={s.rCard}>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 10 }}>
                 <div>
-                  <label style={s.miniLabel}>Votre prénom *</label>
-                  <input style={s.inp} value={author} onChange={e => setAuthor(e.target.value)} placeholder="Ex : Marie" />
+                  <label style={s.miniLabel}>Your first name *</label>
+                  <input style={s.inp} value={author} onChange={e => setAuthor(e.target.value)} placeholder="e.g. Marie" />
                 </div>
                 <div>
-                  <label style={s.miniLabel}>Département</label>
+                  <label style={s.miniLabel}>Department</label>
                   <select style={s.inp} value={department} onChange={e => setDepartment(e.target.value)}>
-                    {['Finance', 'Contrôle de Gestion', 'Comptabilité', 'Trésorerie', 'Autre'].map(d => <option key={d}>{d}</option>)}
+                    {['Finance', 'Controlling', 'Accounting', 'Treasury', 'Other'].map(d => <option key={d}>{d}</option>)}
                   </select>
                 </div>
               </div>
               <button style={{ ...s.saveBtn, opacity: author.trim() ? 1 : 0.4 }} onClick={saveIdea} disabled={!author.trim() || saving}>
-                {saving ? 'Sauvegarde...' : 'Enregistrer dans le dashboard →'}
+                {saving ? 'Saving...' : 'Save to dashboard →'}
               </button>
             </div>
           ) : (
             <div style={{ ...s.rCard, textAlign: 'center', padding: '1.5rem' }}>
               <div style={{ width: 40, height: 40, background: '#1A2E1A', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 10px', color: '#7BC67E', fontSize: 18 }}>✓</div>
-              <div style={{ fontSize: 15, fontWeight: 500, color: '#fff', marginBottom: 8 }}>Idée enregistrée !</div>
-              <button style={{ fontSize: 13, color: '#D4A85A', background: 'none', border: 'none', cursor: 'pointer', textDecoration: 'underline' }} onClick={resetAll}>Évaluer une autre idée</button>
+              <div style={{ fontSize: 15, fontWeight: 500, color: '#fff', marginBottom: 8 }}>Idea saved successfully.</div>
+              <button style={{ fontSize: 13, color: '#D4A85A', background: 'none', border: 'none', cursor: 'pointer', textDecoration: 'underline' }} onClick={resetAll}>Evaluate another idea</button>
             </div>
           )}
         </div>
