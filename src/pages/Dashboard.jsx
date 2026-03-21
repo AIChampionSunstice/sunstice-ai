@@ -21,16 +21,10 @@ const FILTER_OPTS = [
   { key: 'low_cost',      label: 'Low cost' },
 ]
 
-function StarRating({ value, onChange, readonly = false }) {
+function StarRating({ ideaId, value, onChange, readonly = false }) {
   const [hovered, setHovered] = useState(null)
   const stars = [1, 2, 3, 4, 5]
-
-  const getColor = (star) => {
-    const active = hovered !== null ? hovered : value
-    if (star <= Math.floor(active)) return '#D4A85A'
-    if (star - 0.5 <= active) return '#D4A85A'
-    return '#2A2A2A'
-  }
+  const active = hovered !== null ? hovered : value
 
   const handleClick = (e, star) => {
     if (readonly) return
@@ -49,34 +43,35 @@ function StarRating({ value, onChange, readonly = false }) {
   }
 
   return (
-    <div style={{ display: 'flex', gap: 2 }} onMouseLeave={() => setHovered(null)}>
-      {stars.map(star => (
-        <div key={star} style={{ width: 16, height: 16, cursor: readonly ? 'default' : 'pointer', position: 'relative' }}
-          onClick={e => handleClick(e, star)}
-          onMouseMove={e => handleMove(e, star)}>
-          <svg viewBox="0 0 16 16" width="16" height="16">
-            <defs>
-              <linearGradient id={`g${star}`}>
-                {(() => {
-                  const active = hovered !== null ? hovered : value
-                  const full = star <= Math.floor(active)
-                  const half = !full && star - 0.5 <= active
-                  if (full) return <stop offset="100%" stopColor="#D4A85A" />
-                  if (half) return <>
-                    <stop offset="50%" stopColor="#D4A85A" />
-                    <stop offset="50%" stopColor="#2A2A2A" />
-                  </>
-                  return <stop offset="100%" stopColor="#2A2A2A" />
-                })()}
-              </linearGradient>
-            </defs>
-            <polygon points="8,1 10,6 15,6 11,9.5 12.5,15 8,12 3.5,15 5,9.5 1,6 6,6"
-              fill={`url(#g${star})`} />
-          </svg>
-        </div>
-      ))}
-      {!readonly && value > 0 && <span style={{ fontSize: 10, color: '#666', marginLeft: 4, lineHeight: '16px' }}>{value}</span>}
-      {readonly && value > 0 && <span style={{ fontSize: 10, color: '#666', marginLeft: 4, lineHeight: '16px' }}>{value}</span>}
+    <div style={{ display: 'flex', alignItems: 'center', gap: 2 }} onMouseLeave={() => setHovered(null)}>
+      {stars.map(star => {
+        const full = star <= Math.floor(active)
+        const half = !full && star - 0.5 <= active
+        const gradId = `star-${ideaId}-${star}`
+        return (
+          <div key={star} style={{ width: 16, height: 16, cursor: readonly ? 'default' : 'pointer' }}
+            onClick={e => handleClick(e, star)}
+            onMouseMove={e => handleMove(e, star)}>
+            <svg viewBox="0 0 16 16" width="16" height="16">
+              <defs>
+                <linearGradient id={gradId} x1="0" x2="1" y1="0" y2="0">
+                  {full
+                    ? <stop offset="100%" stopColor="#D4A85A" />
+                    : half
+                      ? <><stop offset="50%" stopColor="#D4A85A" /><stop offset="50%" stopColor="#2A2A2A" /></>
+                      : <stop offset="100%" stopColor="#2A2A2A" />
+                  }
+                </linearGradient>
+              </defs>
+              <polygon
+                points="8,1 10,6 15,6 11,9.5 12.5,15 8,12 3.5,15 5,9.5 1,6 6,6"
+                fill={`url(#${gradId})`}
+              />
+            </svg>
+          </div>
+        )
+      })}
+      {value > 0 && <span style={{ fontSize: 10, color: '#666', marginLeft: 4 }}>{value}</span>}
     </div>
   )
 }
@@ -168,7 +163,6 @@ export default function Dashboard({ user }) {
       return sortDir === 'desc' ? vb - va : va - vb
     })
 
-  // Fix avg score — recalculate properly
   const avgScore = ideas.length
     ? Math.round(ideas.reduce((sum, i) => sum + (i.score_global || 0), 0) / ideas.length)
     : 0
@@ -181,7 +175,6 @@ export default function Dashboard({ user }) {
     dust: ideas.filter(i => i.tool_recommendation?.toLowerCase().includes('dust')).length,
   }
 
-  // Chart by department instead of category
   const deptData = Object.entries(
     ideas.reduce((acc, i) => {
       const d = i.department || 'Unknown'
@@ -197,7 +190,6 @@ export default function Dashboard({ user }) {
         <button style={s.refreshBtn} onClick={fetchIdeas}>↻ Refresh</button>
       </div>
 
-      {/* Stats */}
       <div style={s.statsRow}>
         <StatCard val={stats.total} label="Ideas" />
         <StatCard val={stats.quickWins} label="Quick Wins" accent />
@@ -206,7 +198,6 @@ export default function Dashboard({ user }) {
         <StatCard val={stats.dust} label="Dust AI" />
       </div>
 
-      {/* Chart by department */}
       {deptData.length > 0 && (
         <div style={s.chartCard}>
           <div style={s.sectionLabel}>Ideas by department</div>
@@ -225,7 +216,6 @@ export default function Dashboard({ user }) {
         </div>
       )}
 
-      {/* Filters */}
       <div style={s.filterRow}>
         {FILTER_OPTS.map(f => (
           <button key={f.key} style={{ ...s.filterChip, ...(filter === f.key ? s.filterActive : {}) }} onClick={() => setFilter(f.key)}>
@@ -234,7 +224,6 @@ export default function Dashboard({ user }) {
         ))}
       </div>
 
-      {/* Dept filter */}
       <div style={s.deptRow}>
         {departments.map(d => (
           <button key={d} style={{ ...s.deptChip, ...(deptFilter === d ? s.deptActive : {}) }} onClick={() => setDeptFilter(d)}>
@@ -243,7 +232,6 @@ export default function Dashboard({ user }) {
         ))}
       </div>
 
-      {/* Sort bar */}
       <div style={s.sortRow}>
         <span style={s.sortLabel}>Sort by</span>
         {SORT_OPTS.map(o => (
@@ -253,7 +241,6 @@ export default function Dashboard({ user }) {
         ))}
       </div>
 
-      {/* Ideas list */}
       {loading ? (
         <div style={s.empty}>Loading...</div>
       ) : filtered.length === 0 ? (
@@ -278,11 +265,12 @@ export default function Dashboard({ user }) {
                 </div>
               </div>
 
-              {/* Stars + description + see more */}
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
-                <div onClick={e => e.stopPropagation()}>
-                  <StarRating value={ratings[idea.id] || 0} onChange={val => handleRate(idea.id, val)} />
-                </div>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }} onClick={e => e.stopPropagation()}>
+                <StarRating
+                  ideaId={idea.id}
+                  value={ratings[idea.id] || 0}
+                  onChange={val => handleRate(idea.id, val)}
+                />
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                   {idea.description && (
                     <span style={s.descInline}>{idea.description.slice(0, 60)}{idea.description.length > 60 ? '...' : ''}</span>
@@ -295,7 +283,6 @@ export default function Dashboard({ user }) {
                 </div>
               </div>
 
-              {/* IPO expanded */}
               {ipoOpen[idea.id] && (
                 <div style={s.ipoGrid} onClick={e => e.stopPropagation()}>
                   {[['INPUT', idea.ipo_input], ['PROCESS', idea.ipo_process], ['OUTPUT', idea.ipo_output]].map(([l, v]) => v && (
@@ -307,7 +294,6 @@ export default function Dashboard({ user }) {
                 </div>
               )}
 
-              {/* Mini scores inline */}
               <div style={s.miniScores}>
                 {[['ROI', idea.score_roi], ['Feasibility', idea.score_feasibility], ['Security', idea.score_security], ['Cost', idea.score_cost], ['Urgency', idea.score_urgency]].map(([l, v]) => (
                   <div key={l} style={s.miniScore}>
@@ -320,7 +306,6 @@ export default function Dashboard({ user }) {
                 ))}
               </div>
 
-              {/* Detail expanded */}
               {selected?.id === idea.id && (
                 <div style={s.detail}>
                   <div style={s.divider} />
