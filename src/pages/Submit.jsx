@@ -66,6 +66,7 @@ RULES:
 - Always respond in English
 - Max 1-2 questions at a time
 - No emojis
+- When moving to a new step, always announce it with the step name in bold using **: e.g. "**Security & Risk** — let's cover a couple of quick questions."
 - Generate the report automatically when you have enough info`
 
 const WELCOME = `Hi, I'm your AI Champion at Sunstice.
@@ -95,24 +96,27 @@ export default function Submit({ user }) {
   const [input, setInput] = useState('')
   const [loading, setLoading] = useState(false)
   const [report, setReport] = useState(null)
+  const [editReport, setEditReport] = useState(null)
   const [saved, setSaved] = useState(false)
   const [saving, setSaving] = useState(false)
   const [author, setAuthor] = useState('')
   const [department, setDepartment] = useState('Finance')
+  const [editingMsgIdx, setEditingMsgIdx] = useState(null)
+  const [editingMsgVal, setEditingMsgVal] = useState('')
   const bottomRef = useRef(null)
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages, loading])
 
-  const sendMessage = async () => {
-    const text = input.trim()
-    if (!text || loading) return
-    setInput('')
-    const newMessages = [...messages, { role: 'user', content: text }]
-    setMessages(newMessages)
-    setLoading(true)
+  // When report appears, clone it for editing
+  useEffect(() => {
+    if (report) setEditReport({ ...report })
+  }, [report])
 
+  const sendMessage = async (overrideMessages) => {
+    const msgs = overrideMessages || messages
+    setLoading(true)
     try {
       const res = await fetch('/api/chat', {
         method: 'POST',
@@ -120,7 +124,7 @@ export default function Submit({ user }) {
         body: JSON.stringify({
           messages: [
             { role: 'system', content: SYSTEM_PROMPT },
-            ...newMessages.map(m => ({
+            ...msgs.map(m => ({
               role: m.role === 'assistant' ? 'assistant' : 'user',
               content: m.content
             }))
@@ -139,36 +143,69 @@ export default function Submit({ user }) {
     setLoading(false)
   }
 
+  const handleSend = () => {
+    const text = input.trim()
+    if (!text || loading) return
+    setInput('')
+    const newMessages = [...messages, { role: 'user', content: text }]
+    setMessages(newMessages)
+    sendMessage(newMessages)
+  }
+
   const handleKey = (e) => {
-    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage() }
+    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend() }
+  }
+
+  // Edit a past user message and re-run from that point
+  const startEdit = (i, content) => {
+    setEditingMsgIdx(i)
+    setEditingMsgVal(content)
+  }
+
+  const confirmEdit = async (i) => {
+    const trimmed = editingMsgVal.trim()
+    if (!trimmed) return
+    // Truncate history up to and including this message, replace with new value
+    const truncated = [...messages.slice(0, i), { role: 'user', content: trimmed }]
+    setMessages(truncated)
+    setEditingMsgIdx(null)
+    setEditingMsgVal('')
+    setReport(null)
+    setEditReport(null)
+    await sendMessage(truncated)
+  }
+
+  const cancelEdit = () => {
+    setEditingMsgIdx(null)
+    setEditingMsgVal('')
   }
 
   const saveIdea = async () => {
-    if (!report || !author.trim()) return
+    if (!editReport || !author.trim()) return
     setSaving(true)
     const { error } = await supabase.from('ideas').insert([{
       author: author || user?.id,
       department,
-      title: report.title,
-      description: report.description,
+      title: editReport.title,
+      description: editReport.description,
       category: 'IA Use Case',
       q_frequency: 'Evaluated via chatbot',
       q_data_quality: 'Evaluated via chatbot',
       q_error_cost: 'Evaluated via chatbot',
       q_scope: 'Evaluated via chatbot',
-      q_existing_tool: report.tool_recommendation,
-      score_roi: report.score_roi,
-      score_feasibility: report.score_feasibility,
-      score_security: report.score_security,
-      score_cost: report.score_cost,
-      score_urgency: report.score_urgency,
-      score_global: report.score_global,
-      tool_recommendation: report.tool_recommendation,
-      cost_estimate: report.cost_estimate,
-      verdict: report.verdict,
-      ipo_input: report.ipo_input,
-      ipo_process: report.ipo_process,
-      ipo_output: report.ipo_output,
+      q_existing_tool: editReport.tool_recommendation,
+      score_roi: editReport.score_roi,
+      score_feasibility: editReport.score_feasibility,
+      score_security: editReport.score_security,
+      score_cost: editReport.score_cost,
+      score_urgency: editReport.score_urgency,
+      score_global: editReport.score_global,
+      tool_recommendation: editReport.tool_recommendation,
+      cost_estimate: editReport.cost_estimate,
+      verdict: editReport.verdict,
+      ipo_input: editReport.ipo_input,
+      ipo_process: editReport.ipo_process,
+      ipo_output: editReport.ipo_output,
     }])
     setSaving(false)
     if (!error) setSaved(true)
@@ -177,7 +214,8 @@ export default function Submit({ user }) {
 
   const resetAll = () => {
     setMessages([{ role: 'assistant', content: WELCOME }])
-    setReport(null); setSaved(false); setInput(''); setAuthor('')
+    setReport(null); setEditReport(null); setSaved(false)
+    setInput(''); setAuthor(''); setEditingMsgIdx(null)
   }
 
   const VSTYLE = {
@@ -188,6 +226,8 @@ export default function Submit({ user }) {
     'Long-term Project': { bg: '#0D1A2E', color: '#6AABFF' },
   }
 
+  const updateField = (key, val) => setEditReport(r => ({ ...r, [key]: val }))
+
   return (
     <div style={s.wrap}>
       <style>{`@keyframes bounce{0%,80%,100%{transform:scale(0)}40%{transform:scale(1)}}`}</style>
@@ -197,10 +237,35 @@ export default function Submit({ user }) {
           {messages.map((m, i) => (
             <div key={i} style={{ ...s.row, justifyContent: m.role === 'user' ? 'flex-end' : 'flex-start' }}>
               {m.role === 'assistant' && <div style={s.avatar}>AI</div>}
-              <div style={{ ...s.bubble, ...(m.role === 'user' ? s.bubbleUser : s.bubbleBot) }}
-                dangerouslySetInnerHTML={{ __html: formatMessage(m.content) }} />
+
+              {/* User message — editable */}
+              {m.role === 'user' && editingMsgIdx === i ? (
+                <div style={{ maxWidth: '82%', display: 'flex', flexDirection: 'column', gap: 6 }}>
+                  <textarea
+                    style={{ ...s.editArea }}
+                    value={editingMsgVal}
+                    onChange={e => setEditingMsgVal(e.target.value)}
+                    rows={2}
+                    autoFocus
+                  />
+                  <div style={{ display: 'flex', gap: 6, justifyContent: 'flex-end' }}>
+                    <button style={s.editCancel} onClick={cancelEdit}>Cancel</button>
+                    <button style={s.editConfirm} onClick={() => confirmEdit(i)}>Confirm & resend →</button>
+                  </div>
+                </div>
+              ) : (
+                <div style={{ display: 'flex', flexDirection: 'column', alignItems: m.role === 'user' ? 'flex-end' : 'flex-start', gap: 3 }}>
+                  <div style={{ ...s.bubble, ...(m.role === 'user' ? s.bubbleUser : s.bubbleBot) }}
+                    dangerouslySetInnerHTML={{ __html: formatMessage(m.content) }} />
+                  {/* Edit button on user messages only, not after report */}
+                  {m.role === 'user' && !report && (
+                    <button style={s.editBtn} onClick={() => startEdit(i, m.content)}>edit</button>
+                  )}
+                </div>
+              )}
             </div>
           ))}
+
           {loading && (
             <div style={{ ...s.row, justifyContent: 'flex-start' }}>
               <div style={s.avatar}>AI</div>
@@ -219,37 +284,40 @@ export default function Submit({ user }) {
             <textarea style={s.textarea} value={input} onChange={e => setInput(e.target.value)}
               onKeyDown={handleKey} placeholder="Your message... (Enter to send)" rows={2} disabled={loading} />
             <button style={{ ...s.sendBtn, opacity: input.trim() && !loading ? 1 : 0.35 }}
-              onClick={sendMessage} disabled={!input.trim() || loading}>→</button>
+              onClick={handleSend} disabled={!input.trim() || loading}>→</button>
           </div>
         )}
       </div>
 
-      {report && (
+      {editReport && (
         <div style={s.reportWrap}>
+          {/* Header — editable title + description */}
           <div style={s.rCard}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12, flexWrap: 'wrap' }}>
               <div style={{ flex: 1 }}>
-                <div style={s.rTitle}>{report.title}</div>
-                <div style={s.rDesc}>{report.description}</div>
+                <input style={s.editTitle} value={editReport.title} onChange={e => updateField('title', e.target.value)} />
+                <textarea style={s.editDesc} value={editReport.description} onChange={e => updateField('description', e.target.value)} rows={2} />
               </div>
               <div style={{ textAlign: 'right', flexShrink: 0 }}>
-                <div style={s.bigScore}>{report.score_global}<span style={{ fontSize: 16, color: '#666' }}>/100</span></div>
-                <div style={{ ...s.vBadge, background: VSTYLE[report.verdict]?.bg || '#1E1E1E', color: VSTYLE[report.verdict]?.color || '#888' }}>{report.verdict}</div>
+                <div style={s.bigScore}>{editReport.score_global}<span style={{ fontSize: 16, color: '#666' }}>/100</span></div>
+                <div style={{ ...s.vBadge, background: VSTYLE[editReport.verdict]?.bg || '#1E1E1E', color: VSTYLE[editReport.verdict]?.color || '#888' }}>{editReport.verdict}</div>
               </div>
             </div>
           </div>
 
+          {/* IPO — editable */}
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,minmax(0,1fr))', gap: 10 }}>
-            {[['INPUT', report.ipo_input], ['PROCESS', report.ipo_process], ['OUTPUT', report.ipo_output]].map(([l, v]) => (
+            {[['INPUT', 'ipo_input'], ['PROCESS', 'ipo_process'], ['OUTPUT', 'ipo_output']].map(([l, k]) => (
               <div key={l} style={s.rCard}>
                 <div style={s.miniLabel}>{l}</div>
-                <div style={{ fontSize: 12, color: '#CCC', lineHeight: 1.5 }}>{v}</div>
+                <textarea style={s.editIpo} value={editReport[k] || ''} onChange={e => updateField(k, e.target.value)} rows={3} />
               </div>
             ))}
           </div>
 
+          {/* Scores — read only */}
           <div style={s.rCard}>
-            {[['ROI', report.score_roi], ['Feasibility', report.score_feasibility], ['Security', report.score_security], ['Cost', report.score_cost], ['Urgency', report.score_urgency]].map(([l, v]) => (
+            {[['ROI', editReport.score_roi], ['Feasibility', editReport.score_feasibility], ['Security', editReport.score_security], ['Cost', editReport.score_cost], ['Urgency', editReport.score_urgency]].map(([l, v]) => (
               <div key={l} style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8 }}>
                 <span style={{ fontSize: 12, color: '#666', width: 72, flexShrink: 0 }}>{l}</span>
                 <div style={{ flex: 1, height: 4, background: '#2A2A2A', borderRadius: 2, overflow: 'hidden' }}>
@@ -260,14 +328,16 @@ export default function Submit({ user }) {
             ))}
           </div>
 
+          {/* Analysis */}
           <div style={s.rCard}>
             <div style={s.miniLabel}>Analysis</div>
-            <div style={{ fontSize: 13, color: '#AAA', lineHeight: 1.7 }}>{report.critique}</div>
+            <div style={{ fontSize: 13, color: '#AAA', lineHeight: 1.7 }}>{editReport.critique}</div>
           </div>
 
+          {/* Next steps */}
           <div style={s.rCard}>
             <div style={s.miniLabel}>Next steps</div>
-            {report.next_steps?.map((step, i) => (
+            {editReport.next_steps?.map((step, i) => (
               <div key={i} style={{ display: 'flex', gap: 8, alignItems: 'flex-start', marginBottom: 8 }}>
                 <span style={{ width: 5, height: 5, borderRadius: '50%', background: '#D4A85A', flexShrink: 0, marginTop: 6 }} />
                 <span style={{ fontSize: 13, color: '#AAA', lineHeight: 1.5 }}>{step}</span>
@@ -275,8 +345,9 @@ export default function Submit({ user }) {
             ))}
           </div>
 
+          {/* Tool + cost */}
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
-            {[['Recommended tool', report.tool_recommendation], ['Estimate', report.cost_estimate]].map(([l, v]) => (
+            {[['Recommended tool', editReport.tool_recommendation], ['Estimate', editReport.cost_estimate]].map(([l, v]) => (
               <div key={l} style={s.rCard}>
                 <div style={s.miniLabel}>{l}</div>
                 <div style={{ fontSize: 13, color: '#D4A85A', fontWeight: 500 }}>{v}</div>
@@ -284,8 +355,10 @@ export default function Submit({ user }) {
             ))}
           </div>
 
+          {/* Save */}
           {!saved ? (
             <div style={s.rCard}>
+              <div style={{ fontSize: 11, color: '#555', marginBottom: 10 }}>You can edit the title, description and IPO fields above before saving.</div>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 10 }}>
                 <div>
                   <label style={s.miniLabel}>Your first name *</label>
@@ -324,13 +397,18 @@ const s = {
   bubble: { maxWidth: '82%', padding: '10px 14px', borderRadius: 12, fontSize: 14, lineHeight: 1.6 },
   bubbleBot: { background: '#1E1E1E', color: '#CCC', borderBottomLeftRadius: 4 },
   bubbleUser: { background: '#2A1F0D', color: '#D4A85A', borderBottomRightRadius: 4 },
+  editBtn: { fontSize: 10, color: '#555', background: 'none', border: 'none', cursor: 'pointer', padding: '0 2px', textDecoration: 'underline' },
+  editArea: { fontFamily: "'Inter',sans-serif", fontSize: 13, padding: '8px 12px', background: '#1E1E1E', border: '0.5px solid #D4A85A', borderRadius: 8, color: '#D4A85A', width: '100%', resize: 'vertical', outline: 'none' },
+  editCancel: { fontFamily: "'Inter',sans-serif", fontSize: 11, color: '#666', background: 'none', border: '0.5px solid #333', borderRadius: 6, padding: '4px 10px', cursor: 'pointer' },
+  editConfirm: { fontFamily: "'Inter',sans-serif", fontSize: 11, color: '#0D0D0D', background: '#D4A85A', border: 'none', borderRadius: 6, padding: '4px 12px', cursor: 'pointer', fontWeight: 600 },
   inputRow: { display: 'flex', borderTop: '0.5px solid #2A2A2A' },
   textarea: { flex: 1, fontFamily: "'Inter',sans-serif", fontSize: 14, padding: '12px 16px', background: '#0D0D0D', border: 'none', color: '#fff', outline: 'none', resize: 'none', lineHeight: 1.5 },
   sendBtn: { width: 50, background: '#D4A85A', border: 'none', color: '#0D0D0D', fontSize: 20, fontWeight: 700, cursor: 'pointer' },
   reportWrap: { display: 'flex', flexDirection: 'column', gap: 10 },
   rCard: { background: '#141414', border: '0.5px solid #2A2A2A', borderRadius: 10, padding: '1.25rem' },
-  rTitle: { fontFamily: "'Syne',sans-serif", fontSize: 17, fontWeight: 700, color: '#fff', marginBottom: 4 },
-  rDesc: { fontSize: 13, color: '#888', lineHeight: 1.5 },
+  editTitle: { fontFamily: "'Syne',sans-serif", fontSize: 17, fontWeight: 700, color: '#fff', background: 'transparent', border: 'none', borderBottom: '0.5px solid #333', outline: 'none', width: '100%', marginBottom: 8, padding: '2px 0' },
+  editDesc: { fontFamily: "'Inter',sans-serif", fontSize: 13, color: '#888', background: 'transparent', border: 'none', borderBottom: '0.5px solid #2A2A2A', outline: 'none', width: '100%', resize: 'none', lineHeight: 1.5, padding: '2px 0' },
+  editIpo: { fontFamily: "'Inter',sans-serif", fontSize: 12, color: '#CCC', background: '#111', border: '0.5px solid #2A2A2A', borderRadius: 4, outline: 'none', width: '100%', resize: 'vertical', padding: '6px 8px', lineHeight: 1.5 },
   bigScore: { fontFamily: "'Syne',sans-serif", fontSize: 38, fontWeight: 700, color: '#D4A85A', lineHeight: 1 },
   vBadge: { fontSize: 11, fontWeight: 500, padding: '4px 12px', borderRadius: 20, display: 'inline-block', marginTop: 6 },
   miniLabel: { fontSize: 10, color: '#555', textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 8 },
