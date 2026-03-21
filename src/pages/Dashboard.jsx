@@ -265,34 +265,9 @@ export default function Dashboard({ user }) {
                 </div>
               </div>
 
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }} onClick={e => e.stopPropagation()}>
-                <StarRating
-                  ideaId={idea.id}
-                  value={ratings[idea.id] || 0}
-                  onChange={val => handleRate(idea.id, val)}
-                />
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                  {idea.description && (
-                    <span style={s.descInline}>{idea.description.slice(0, 60)}{idea.description.length > 60 ? '...' : ''}</span>
-                  )}
-                  {(idea.ipo_input || idea.ipo_process || idea.ipo_output) && (
-                    <button style={s.seeMoreBtn} onClick={e => toggleIpo(e, idea.id)}>
-                      {ipoOpen[idea.id] ? 'see less' : 'see more'}
-                    </button>
-                  )}
-                </div>
+              <div style={{ marginBottom: 10 }} onClick={e => e.stopPropagation()}>
+                <StarRating ideaId={idea.id} value={ratings[idea.id] || 0} onChange={val => handleRate(idea.id, val)} />
               </div>
-
-              {ipoOpen[idea.id] && (
-                <div style={s.ipoGrid} onClick={e => e.stopPropagation()}>
-                  {[['INPUT', idea.ipo_input], ['PROCESS', idea.ipo_process], ['OUTPUT', idea.ipo_output]].map(([l, v]) => v && (
-                    <div key={l} style={s.ipoBlock}>
-                      <div style={s.ipoLabel}>{l}</div>
-                      <div style={s.ipoVal}>{v}</div>
-                    </div>
-                  ))}
-                </div>
-              )}
 
               <div style={s.miniScores}>
                 {[['ROI', idea.score_roi], ['Feasibility', idea.score_feasibility], ['Security', idea.score_security], ['Cost', idea.score_cost], ['Urgency', idea.score_urgency]].map(([l, v]) => (
@@ -305,6 +280,28 @@ export default function Dashboard({ user }) {
                   </div>
                 ))}
               </div>
+
+              {idea.description && (
+                <div style={{ marginTop: 10, fontSize: 12, color: '#666', fontStyle: 'italic', lineHeight: 1.5 }} onClick={e => e.stopPropagation()}>
+                  {idea.description.slice(0, 80)}{idea.description.length > 80 ? '... ' : ' '}
+                  {(idea.ipo_input || idea.ipo_process || idea.ipo_output) && (
+                    <button style={s.seeMoreBtn} onClick={e => toggleIpo(e, idea.id)}>
+                      {ipoOpen[idea.id] ? 'see less' : 'see more'}
+                    </button>
+                  )}
+                </div>
+              )}
+
+              {ipoOpen[idea.id] && (
+                <div style={s.ipoGrid} onClick={e => e.stopPropagation()}>
+                  {[['INPUT', idea.ipo_input], ['PROCESS', idea.ipo_process], ['OUTPUT', idea.ipo_output]].map(([l, v]) => v && (
+                    <div key={l} style={s.ipoBlock}>
+                      <div style={s.ipoLabel}>{l}</div>
+                      <div style={s.ipoVal}>{v}</div>
+                    </div>
+                  ))}
+                </div>
+              )}
 
               {selected?.id === idea.id && (
                 <div style={s.detail}>
