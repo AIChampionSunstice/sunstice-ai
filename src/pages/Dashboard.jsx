@@ -3,9 +3,10 @@ import { supabase } from '../lib/supabase'
 import { RadarChart, Radar, PolarGrid, PolarAngleAxis, ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, Cell } from 'recharts'
 
 const VERDICT_STYLE = {
-  'Quick Win':      { bg: '#1A2E1A', color: '#7BC67E' },
-  'Fort potentiel': { bg: '#2A1F0D', color: '#D4A85A' },
-  'À approfondir':  { bg: '#1E1E1E', color: '#888' },
+  'Quick Win':         { bg: '#1A2E1A', color: '#7BC67E' },
+  'Fort potentiel':    { bg: '#2A1F0D', color: '#D4A85A' },
+  'À approfondir':     { bg: '#1E1E1E', color: '#888' },
+  'A approfondir':     { bg: '#1E1E1E', color: '#888' },
   'Long-term Project': { bg: '#0D1A2E', color: '#6AABFF' },
 }
 
@@ -20,7 +21,67 @@ const FILTER_OPTS = [
   { key: 'low_cost',      label: 'Low cost' },
 ]
 
-export default function Dashboard() {
+function StarRating({ value, onChange, readonly = false }) {
+  const [hovered, setHovered] = useState(null)
+  const stars = [1, 2, 3, 4, 5]
+
+  const getColor = (star) => {
+    const active = hovered !== null ? hovered : value
+    if (star <= Math.floor(active)) return '#D4A85A'
+    if (star - 0.5 <= active) return '#D4A85A'
+    return '#2A2A2A'
+  }
+
+  const handleClick = (e, star) => {
+    if (readonly) return
+    e.stopPropagation()
+    const rect = e.currentTarget.getBoundingClientRect()
+    const x = e.clientX - rect.left
+    const val = x < rect.width / 2 ? star - 0.5 : star
+    onChange(val === value ? 0 : val)
+  }
+
+  const handleMove = (e, star) => {
+    if (readonly) return
+    const rect = e.currentTarget.getBoundingClientRect()
+    const x = e.clientX - rect.left
+    setHovered(x < rect.width / 2 ? star - 0.5 : star)
+  }
+
+  return (
+    <div style={{ display: 'flex', gap: 2 }} onMouseLeave={() => setHovered(null)}>
+      {stars.map(star => (
+        <div key={star} style={{ width: 16, height: 16, cursor: readonly ? 'default' : 'pointer', position: 'relative' }}
+          onClick={e => handleClick(e, star)}
+          onMouseMove={e => handleMove(e, star)}>
+          <svg viewBox="0 0 16 16" width="16" height="16">
+            <defs>
+              <linearGradient id={`g${star}`}>
+                {(() => {
+                  const active = hovered !== null ? hovered : value
+                  const full = star <= Math.floor(active)
+                  const half = !full && star - 0.5 <= active
+                  if (full) return <stop offset="100%" stopColor="#D4A85A" />
+                  if (half) return <>
+                    <stop offset="50%" stopColor="#D4A85A" />
+                    <stop offset="50%" stopColor="#2A2A2A" />
+                  </>
+                  return <stop offset="100%" stopColor="#2A2A2A" />
+                })()}
+              </linearGradient>
+            </defs>
+            <polygon points="8,1 10,6 15,6 11,9.5 12.5,15 8,12 3.5,15 5,9.5 1,6 6,6"
+              fill={`url(#g${star})`} />
+          </svg>
+        </div>
+      ))}
+      {!readonly && value > 0 && <span style={{ fontSize: 10, color: '#666', marginLeft: 4, lineHeight: '16px' }}>{value}</span>}
+      {readonly && value > 0 && <span style={{ fontSize: 10, color: '#666', marginLeft: 4, lineHeight: '16px' }}>{value}</span>}
+    </div>
+  )
+}
+
+export default function Dashboard({ user }) {
   const [ideas, setIdeas] = useState([])
   const [loading, setLoading] = useState(true)
   const [filter, setFilter] = useState('all')
@@ -28,17 +89,46 @@ export default function Dashboard() {
   const [deptFilter, setDeptFilter] = useState('All')
   const [sortField, setSortField] = useState('score_global')
   const [sortDir, setSortDir] = useState('desc')
+  const [ipoOpen, setIpoOpen] = useState({})
+  const [ratings, setRatings] = useState({})
+  const [deleting, setDeleting] = useState(null)
+
+  const isAdmin = user?.role === 'admin'
 
   useEffect(() => { fetchIdeas() }, [])
 
   async function fetchIdeas() {
     setLoading(true)
     const { data, error } = await supabase.from('ideas').select('*')
-    if (!error) setIdeas(data || [])
+    if (!error) {
+      setIdeas(data || [])
+      const r = {}
+      ;(data || []).forEach(i => { if (i.star_rating) r[i.id] = i.star_rating })
+      setRatings(r)
+    }
     setLoading(false)
   }
 
-  const departments = ['All', ...new Set(ideas.map(i => i.department))]
+  async function handleRate(id, val) {
+    setRatings(prev => ({ ...prev, [id]: val }))
+    await supabase.from('ideas').update({ star_rating: val }).eq('id', id)
+  }
+
+  async function handleDelete(e, id) {
+    e.stopPropagation()
+    if (!window.confirm('Delete this idea?')) return
+    setDeleting(id)
+    await supabase.from('ideas').delete().eq('id', id)
+    setIdeas(prev => prev.filter(i => i.id !== id))
+    setDeleting(null)
+  }
+
+  const toggleIpo = (e, id) => {
+    e.stopPropagation()
+    setIpoOpen(prev => ({ ...prev, [id]: !prev[id] }))
+  }
+
+  const departments = ['All', ...new Set(ideas.map(i => i.department).filter(Boolean))]
 
   const SORT_OPTS = [
     { field: 'score_global',      label: 'Global score' },
@@ -47,6 +137,7 @@ export default function Dashboard() {
     { field: 'score_security',    label: 'Security' },
     { field: 'score_cost',        label: 'Cost' },
     { field: 'score_urgency',     label: 'Urgency' },
+    { field: 'star_rating',       label: 'Stars' },
     { field: 'created_at',        label: 'Date' },
   ]
 
@@ -71,23 +162,33 @@ export default function Dashboard() {
       }
     })
     .sort((a, b) => {
-      const va = a[sortField] ?? 0
-      const vb = b[sortField] ?? 0
+      let va = sortField === 'star_rating' ? (ratings[a.id] ?? 0) : (a[sortField] ?? 0)
+      let vb = sortField === 'star_rating' ? (ratings[b.id] ?? 0) : (b[sortField] ?? 0)
       if (typeof va === 'string') return sortDir === 'desc' ? vb.localeCompare(va) : va.localeCompare(vb)
       return sortDir === 'desc' ? vb - va : va - vb
     })
 
+  // Fix avg score — recalculate properly
+  const avgScore = ideas.length
+    ? Math.round(ideas.reduce((sum, i) => sum + (i.score_global || 0), 0) / ideas.length)
+    : 0
+
   const stats = {
     total: ideas.length,
     quickWins: ideas.filter(i => i.verdict === 'Quick Win').length,
-    avgScore: ideas.length ? Math.round(ideas.reduce((a, b) => a + b.score_global, 0) / ideas.length) : 0,
+    avgScore,
     copilot: ideas.filter(i => i.tool_recommendation?.toLowerCase().includes('copilot')).length,
     dust: ideas.filter(i => i.tool_recommendation?.toLowerCase().includes('dust')).length,
   }
 
-  const catData = Object.entries(
-    ideas.reduce((acc, i) => { acc[i.category] = (acc[i.category] || 0) + 1; return acc }, {})
-  ).map(([name, count]) => ({ name, count })).sort((a, b) => b.count - a.count).slice(0, 6)
+  // Chart by department instead of category
+  const deptData = Object.entries(
+    ideas.reduce((acc, i) => {
+      const d = i.department || 'Unknown'
+      acc[d] = (acc[d] || 0) + 1
+      return acc
+    }, {})
+  ).map(([name, count]) => ({ name, count })).sort((a, b) => b.count - a.count)
 
   return (
     <div style={s.wrap}>
@@ -105,18 +206,18 @@ export default function Dashboard() {
         <StatCard val={stats.dust} label="Dust AI" />
       </div>
 
-      {/* Chart */}
-      {catData.length > 0 && (
+      {/* Chart by department */}
+      {deptData.length > 0 && (
         <div style={s.chartCard}>
-          <div style={s.sectionLabel}>Ideas by category</div>
-          <div style={{ height: 140 }}>
+          <div style={s.sectionLabel}>Ideas by department</div>
+          <div style={{ height: Math.max(100, deptData.length * 32) }}>
             <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={catData} layout="vertical" margin={{ left: 0, right: 20, top: 0, bottom: 0 }}>
+              <BarChart data={deptData} layout="vertical" margin={{ left: 0, right: 20, top: 0, bottom: 0 }}>
                 <XAxis type="number" hide />
                 <YAxis type="category" dataKey="name" width={110} tick={{ fontSize: 12, fill: '#888', fontFamily: 'Inter' }} />
                 <Tooltip contentStyle={{ background: '#1E1E1E', border: '0.5px solid #333', borderRadius: 8, color: '#fff', fontSize: 12 }} />
                 <Bar dataKey="count" radius={[0, 4, 4, 0]}>
-                  {catData.map((_, i) => <Cell key={i} fill={i === 0 ? '#D4A85A' : '#2A2A2A'} />)}
+                  {deptData.map((_, i) => <Cell key={i} fill={i === 0 ? '#D4A85A' : '#2A2A2A'} />)}
                 </Bar>
               </BarChart>
             </ResponsiveContainer>
@@ -165,7 +266,6 @@ export default function Dashboard() {
                 <div style={{ flex: 1 }}>
                   <div style={s.ideaTitle}>{idea.title}</div>
                   <div style={s.ideaMeta}>
-                    <span style={s.pill}>{idea.category}</span>
                     <span style={s.pill}>{idea.department}</span>
                     <span style={{ ...s.pill, ...getToolStyle(idea.tool_recommendation) }}>{idea.tool_recommendation}</span>
                   </div>
@@ -178,12 +278,41 @@ export default function Dashboard() {
                 </div>
               </div>
 
+              {/* Stars + description + see more */}
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
+                <div onClick={e => e.stopPropagation()}>
+                  <StarRating value={ratings[idea.id] || 0} onChange={val => handleRate(idea.id, val)} />
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  {idea.description && (
+                    <span style={s.descInline}>{idea.description.slice(0, 60)}{idea.description.length > 60 ? '...' : ''}</span>
+                  )}
+                  {(idea.ipo_input || idea.ipo_process || idea.ipo_output) && (
+                    <button style={s.seeMoreBtn} onClick={e => toggleIpo(e, idea.id)}>
+                      {ipoOpen[idea.id] ? 'see less' : 'see more'}
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              {/* IPO expanded */}
+              {ipoOpen[idea.id] && (
+                <div style={s.ipoGrid} onClick={e => e.stopPropagation()}>
+                  {[['INPUT', idea.ipo_input], ['PROCESS', idea.ipo_process], ['OUTPUT', idea.ipo_output]].map(([l, v]) => v && (
+                    <div key={l} style={s.ipoBlock}>
+                      <div style={s.ipoLabel}>{l}</div>
+                      <div style={s.ipoVal}>{v}</div>
+                    </div>
+                  ))}
+                </div>
+              )}
+
               {/* Mini scores inline */}
               <div style={s.miniScores}>
                 {[['ROI', idea.score_roi], ['Feasibility', idea.score_feasibility], ['Security', idea.score_security], ['Cost', idea.score_cost], ['Urgency', idea.score_urgency]].map(([l, v]) => (
                   <div key={l} style={s.miniScore}>
                     <div style={s.miniScoreLabel}>{l}</div>
-                    <div style={{ ...s.miniScoreBar }}>
+                    <div style={s.miniScoreBar}>
                       <div style={{ width: v + '%', height: '100%', background: v >= 70 ? '#D4A85A' : v >= 45 ? '#444' : '#E24B4A', borderRadius: 2 }} />
                     </div>
                     <div style={s.miniScoreVal}>{v}</div>
@@ -191,10 +320,10 @@ export default function Dashboard() {
                 ))}
               </div>
 
+              {/* Detail expanded */}
               {selected?.id === idea.id && (
                 <div style={s.detail}>
                   <div style={s.divider} />
-                  {idea.description && <div style={s.desc}>{idea.description}</div>}
                   <div style={s.detailGrid}>
                     <div style={{ height: 180 }}>
                       <ResponsiveContainer width="100%" height="100%">
@@ -228,6 +357,11 @@ export default function Dashboard() {
                         <div style={s.infoLbl}>Verdict</div>
                         <div style={{ ...s.infoVal, color: VERDICT_STYLE[idea.verdict]?.color || '#888' }}>{idea.verdict}</div>
                       </div>
+                      {isAdmin && (
+                        <button style={s.deleteBtn} onClick={e => handleDelete(e, idea.id)} disabled={deleting === idea.id}>
+                          {deleting === idea.id ? 'Deleting...' : 'Delete this idea'}
+                        </button>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -278,25 +412,31 @@ const s = {
   sortActive: { border: '0.5px solid #D4A85A', color: '#D4A85A' },
   list: { display: 'flex', flexDirection: 'column', gap: 10 },
   ideaCard: { background: '#141414', border: '0.5px solid #2A2A2A', borderRadius: 12, padding: '1.25rem', cursor: 'pointer', transition: 'border-color 0.15s' },
-  ideaTop: { display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12, marginBottom: 12 },
+  ideaTop: { display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12, marginBottom: 10 },
   ideaTitle: { fontFamily: "'Syne',sans-serif", fontSize: 14, fontWeight: 600, color: '#fff', marginBottom: 8, lineHeight: 1.3 },
   ideaMeta: { display: 'flex', gap: 6, flexWrap: 'wrap' },
   pill: { fontSize: 11, color: '#666', background: '#1E1E1E', padding: '3px 9px', borderRadius: 20 },
   right: { textAlign: 'right', flexShrink: 0 },
   scoreBig: { fontFamily: "'Syne',sans-serif", fontSize: 28, fontWeight: 700, color: '#D4A85A', lineHeight: 1 },
   verdictBadge: { fontSize: 10, fontWeight: 500, padding: '3px 10px', borderRadius: 20, marginTop: 4, display: 'inline-block' },
-  miniScores: { display: 'flex', gap: 10, flexWrap: 'wrap' },
+  descInline: { fontSize: 12, color: '#666', fontStyle: 'italic' },
+  seeMoreBtn: { fontSize: 11, color: '#D4A85A', background: 'none', border: 'none', cursor: 'pointer', padding: 0, textDecoration: 'underline', flexShrink: 0 },
+  ipoGrid: { display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0,1fr))', gap: 8, marginBottom: 12 },
+  ipoBlock: { background: '#1A1A1A', border: '0.5px solid #2A2A2A', borderRadius: 6, padding: '8px 10px' },
+  ipoLabel: { fontSize: 9, color: '#555', textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 4 },
+  ipoVal: { fontSize: 11, color: '#CCC', lineHeight: 1.5 },
+  miniScores: { display: 'flex', gap: 10, flexWrap: 'wrap', marginTop: 8 },
   miniScore: { display: 'flex', alignItems: 'center', gap: 5, flex: 1, minWidth: 100 },
   miniScoreLabel: { fontSize: 10, color: '#555', width: 60, flexShrink: 0 },
   miniScoreBar: { flex: 1, height: 3, background: '#2A2A2A', borderRadius: 2, overflow: 'hidden' },
   miniScoreVal: { fontSize: 10, color: '#888', width: 20, textAlign: 'right' },
   detail: { marginTop: '1rem' },
   divider: { height: '0.5px', background: '#2A2A2A', marginBottom: '1rem' },
-  desc: { fontSize: 13, color: '#888', lineHeight: 1.6, marginBottom: '1rem' },
   detailGrid: { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 },
   detailInfo: { display: 'flex', flexDirection: 'column', gap: 8 },
   infoBlock: { background: '#1A1A1A', border: '0.5px solid #2A2A2A', borderRadius: 6, padding: '8px 10px' },
   infoLbl: { fontSize: 10, color: '#555', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 2 },
   infoVal: { fontSize: 12, color: '#D4A85A', fontWeight: 500 },
+  deleteBtn: { width: '100%', fontFamily: "'Inter',sans-serif", fontSize: 12, padding: '8px', background: 'transparent', border: '0.5px solid #E24B4A', color: '#E24B4A', borderRadius: 6, cursor: 'pointer', marginTop: 4 },
   empty: { textAlign: 'center', color: '#555', fontSize: 14, padding: '3rem', background: '#141414', borderRadius: 12, border: '0.5px dashed #2A2A2A' },
 }
