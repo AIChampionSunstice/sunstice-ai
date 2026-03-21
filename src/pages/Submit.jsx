@@ -291,7 +291,7 @@ export default function Submit({ user }) {
                 <div>
                   <label style={s.miniLabel}>Department</label>
                   <select style={s.inp} value={department} onChange={e => setDepartment(e.target.value)}>
-                    {['Finance', 'Controlling', 'Accounting', 'Treasury', 'Other'].map(d => <option key={d}>{d}</option>)}
+                    {['PS', 'R&D', 'Sales', 'Finance', 'Marketing', 'CS', 'CSX'].map(d => <option key={d}>{d}</option>)}
                   </select>
                 </div>
               </div>
