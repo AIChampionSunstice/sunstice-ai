@@ -147,7 +147,7 @@ export default function Submit({ user }) {
     if (!report || !author.trim()) return
     setSaving(true)
     const { error } = await supabase.from('ideas').insert([{
-      author: author || user,
+      author: author || user?.id,
       department,
       title: report.title,
       description: report.description,
@@ -166,6 +166,9 @@ export default function Submit({ user }) {
       tool_recommendation: report.tool_recommendation,
       cost_estimate: report.cost_estimate,
       verdict: report.verdict,
+      ipo_input: report.ipo_input,
+      ipo_process: report.ipo_process,
+      ipo_output: report.ipo_output,
     }])
     setSaving(false)
     if (!error) setSaved(true)
