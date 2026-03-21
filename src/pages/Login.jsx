@@ -1,7 +1,8 @@
 import { useState } from 'react'
 
 const CREDENTIALS = [
-  { id: 'Sunstice2026', password: 'SunsticeAI' }
+  { id: 'Sunstice2026', password: 'SunsticeAI', role: 'user' },
+  { id: 'SunsticeAdmin', password: 'Admin2026', role: 'admin' },
 ]
 
 export default function Login({ onLogin }) {
@@ -12,28 +13,33 @@ export default function Login({ onLogin }) {
   const handleSubmit = (e) => {
     e.preventDefault()
     const match = CREDENTIALS.find(c => c.id === id && c.password === pw)
-    if (match) { onLogin(id); setError('') }
-    else setError('Identifiant ou mot de passe incorrect.')
+    if (match) { onLogin({ id: match.id, role: match.role }); setError('') }
+    else setError('Incorrect username or password.')
   }
 
   return (
     <div style={styles.bg}>
       <div style={styles.card}>
-        <div style={styles.logo}>Finance AI Hub</div>
-        <div style={styles.sub}>Sunstice — Espace IA interne</div>
+        <div style={styles.logoRow}>
+          <div style={styles.logoMark}>S</div>
+          <div>
+            <div style={styles.logo}>Sunstice</div>
+            <div style={styles.sub}>Finance AI Hub</div>
+          </div>
+        </div>
         <form onSubmit={handleSubmit} style={styles.form}>
           <div style={styles.field}>
-            <label style={styles.label}>Identifiant</label>
+            <label style={styles.label}>Username</label>
             <input style={styles.input} value={id} onChange={e => setId(e.target.value)} placeholder="Sunstice2026" autoComplete="username" />
           </div>
           <div style={styles.field}>
-            <label style={styles.label}>Mot de passe</label>
+            <label style={styles.label}>Password</label>
             <input style={styles.input} type="password" value={pw} onChange={e => setPw(e.target.value)} placeholder="••••••••••" autoComplete="current-password" />
           </div>
           {error && <div style={styles.error}>{error}</div>}
-          <button style={styles.btn} type="submit">Se connecter →</button>
+          <button style={styles.btn} type="submit">Sign in →</button>
         </form>
-        <div style={styles.hint}>Contactez votre AI Champion pour obtenir l'accès.</div>
+        <div style={styles.hint}>Contact your AI Champion to get access.</div>
       </div>
     </div>
   )
@@ -42,8 +48,10 @@ export default function Login({ onLogin }) {
 const styles = {
   bg: { minHeight: '100vh', background: '#0D0D0D', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: "'Inter', sans-serif", padding: '1rem' },
   card: { background: '#141414', border: '0.5px solid #2A2A2A', borderRadius: 16, padding: '2.5rem 2rem', width: '100%', maxWidth: 380 },
-  logo: { fontFamily: "'Syne', sans-serif", fontSize: 22, fontWeight: 700, color: '#D4A85A', marginBottom: 4 },
-  sub: { fontSize: 13, color: '#666', marginBottom: '2rem' },
+  logoRow: { display: 'flex', alignItems: 'center', gap: 12, marginBottom: '2rem' },
+  logoMark: { width: 40, height: 40, borderRadius: 10, background: '#D4A85A', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: "'Syne', sans-serif", fontSize: 20, fontWeight: 700, color: '#0D0D0D', flexShrink: 0 },
+  logo: { fontFamily: "'Syne', sans-serif", fontSize: 18, fontWeight: 700, color: '#fff', lineHeight: 1.1 },
+  sub: { fontSize: 12, color: '#555', marginTop: 2 },
   form: { display: 'flex', flexDirection: 'column', gap: '1rem' },
   field: { display: 'flex', flexDirection: 'column', gap: 6 },
   label: { fontSize: 11, fontWeight: 500, color: '#888', textTransform: 'uppercase', letterSpacing: '0.06em' },
