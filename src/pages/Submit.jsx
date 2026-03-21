@@ -97,6 +97,7 @@ export default function Submit({ user }) {
   const [loading, setLoading] = useState(false)
   const [report, setReport] = useState(null)
   const [editReport, setEditReport] = useState(null)
+  const [editMode, setEditMode] = useState(false)
   const [saved, setSaved] = useState(false)
   const [saving, setSaving] = useState(false)
   const [author, setAuthor] = useState('')
@@ -215,7 +216,7 @@ export default function Submit({ user }) {
   const resetAll = () => {
     setMessages([{ role: 'assistant', content: WELCOME }])
     setReport(null); setEditReport(null); setSaved(false)
-    setInput(''); setAuthor(''); setEditingMsgIdx(null)
+    setInput(''); setAuthor(''); setEditingMsgIdx(null); setEditMode(false)
   }
 
   const VSTYLE = {
@@ -291,12 +292,16 @@ export default function Submit({ user }) {
 
       {editReport && (
         <div style={s.reportWrap}>
-          {/* Header — editable title + description */}
+          {/* Header */}
           <div style={s.rCard}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12, flexWrap: 'wrap' }}>
               <div style={{ flex: 1 }}>
-                <input style={s.editTitle} value={editReport.title} onChange={e => updateField('title', e.target.value)} />
-                <textarea style={s.editDesc} value={editReport.description} onChange={e => updateField('description', e.target.value)} rows={2} />
+                {editMode
+                  ? <input style={s.editTitle} value={editReport.title} onChange={e => updateField('title', e.target.value)} />
+                  : <div style={s.rTitle}>{editReport.title}</div>}
+                {editMode
+                  ? <textarea style={s.editDesc} value={editReport.description} onChange={e => updateField('description', e.target.value)} rows={2} />
+                  : <div style={s.rDesc}>{editReport.description}</div>}
               </div>
               <div style={{ textAlign: 'right', flexShrink: 0 }}>
                 <div style={s.bigScore}>{editReport.score_global}<span style={{ fontSize: 16, color: '#666' }}>/100</span></div>
@@ -305,12 +310,14 @@ export default function Submit({ user }) {
             </div>
           </div>
 
-          {/* IPO — editable */}
+          {/* IPO */}
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,minmax(0,1fr))', gap: 10 }}>
             {[['INPUT', 'ipo_input'], ['PROCESS', 'ipo_process'], ['OUTPUT', 'ipo_output']].map(([l, k]) => (
               <div key={l} style={s.rCard}>
                 <div style={s.miniLabel}>{l}</div>
-                <textarea style={s.editIpo} value={editReport[k] || ''} onChange={e => updateField(k, e.target.value)} rows={3} />
+                {editMode
+                  ? <textarea style={s.editIpo} value={editReport[k] || ''} onChange={e => updateField(k, e.target.value)} rows={3} />
+                  : <div style={{ fontSize: 12, color: '#CCC', lineHeight: 1.5 }}>{editReport[k]}</div>}
               </div>
             ))}
           </div>
@@ -358,7 +365,12 @@ export default function Submit({ user }) {
           {/* Save */}
           {!saved ? (
             <div style={s.rCard}>
-              <div style={{ fontSize: 11, color: '#555', marginBottom: 10 }}>You can edit the title, description and IPO fields above before saving.</div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+                <div style={{ fontSize: 11, color: '#555' }}>Review your report before saving.</div>
+                <button style={s.editToggleBtn} onClick={() => setEditMode(m => !m)}>
+                  {editMode ? 'Done editing' : 'Edit report'}
+                </button>
+              </div>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 10 }}>
                 <div>
                   <label style={s.miniLabel}>Your first name *</label>
@@ -413,5 +425,6 @@ const s = {
   vBadge: { fontSize: 11, fontWeight: 500, padding: '4px 12px', borderRadius: 20, display: 'inline-block', marginTop: 6 },
   miniLabel: { fontSize: 10, color: '#555', textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 8 },
   inp: { fontFamily: "'Inter',sans-serif", fontSize: 13, padding: '9px 12px', background: '#1E1E1E', border: '0.5px solid #333', borderRadius: 8, color: '#fff', width: '100%', appearance: 'none' },
+  editToggleBtn: { fontFamily: "'Inter',sans-serif", fontSize: 11, color: '#D4A85A', background: 'none', border: '0.5px solid #D4A85A33', borderRadius: 6, padding: '4px 10px', cursor: 'pointer' },
   saveBtn: { width: '100%', fontFamily: "'Syne',sans-serif", fontSize: 14, fontWeight: 600, padding: 12, background: '#D4A85A', color: '#0D0D0D', border: 'none', borderRadius: 8, cursor: 'pointer' },
 }
