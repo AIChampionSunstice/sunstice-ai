@@ -67,6 +67,7 @@ RULES:
 - Max 1-2 questions at a time
 - No emojis
 - When moving to a new step, always announce it with the step name in bold using **: e.g. "**Security & Risk** — let's cover a couple of quick questions."
+- When asking multiple questions in one message, always number them: 1. ... 2. ... 3. ...
 - Generate the report automatically when you have enough info`
 
 const WELCOME = `Hi, I'm your AI Champion at Sunstice.
@@ -421,6 +422,8 @@ const s = {
   editTitle: { fontFamily: "'Syne',sans-serif", fontSize: 17, fontWeight: 700, color: '#fff', background: 'transparent', border: 'none', borderBottom: '0.5px solid #333', outline: 'none', width: '100%', marginBottom: 8, padding: '2px 0' },
   editDesc: { fontFamily: "'Inter',sans-serif", fontSize: 13, color: '#888', background: 'transparent', border: 'none', borderBottom: '0.5px solid #2A2A2A', outline: 'none', width: '100%', resize: 'none', lineHeight: 1.5, padding: '2px 0' },
   editIpo: { fontFamily: "'Inter',sans-serif", fontSize: 12, color: '#CCC', background: '#111', border: '0.5px solid #2A2A2A', borderRadius: 4, outline: 'none', width: '100%', resize: 'vertical', padding: '6px 8px', lineHeight: 1.5 },
+  rTitle: { fontFamily: "'Syne',sans-serif", fontSize: 17, fontWeight: 700, color: '#fff', marginBottom: 4 },
+  rDesc: { fontSize: 13, color: '#888', lineHeight: 1.5 },
   bigScore: { fontFamily: "'Syne',sans-serif", fontSize: 38, fontWeight: 700, color: '#D4A85A', lineHeight: 1 },
   vBadge: { fontSize: 11, fontWeight: 500, padding: '4px 12px', borderRadius: 20, display: 'inline-block', marginTop: 6 },
   miniLabel: { fontSize: 10, color: '#555', textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 8 },
