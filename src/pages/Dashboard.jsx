@@ -71,7 +71,7 @@ function StarRating({ ideaId, value, onChange, readonly = false }) {
           </div>
         )
       })}
-      {value > 0 && <span style={{ fontSize: 10, color: '#666', marginLeft: 4 }}>{value}</span>}
+      {/* avg shown outside */
     </div>
   )
 }
@@ -86,6 +86,7 @@ export default function Dashboard({ user }) {
   const [sortDir, setSortDir] = useState('desc')
   const [ipoOpen, setIpoOpen] = useState({})
   const [ratings, setRatings] = useState({})
+  const [ratingCounts, setRatingCounts] = useState({})
   const [deleting, setDeleting] = useState(null)
 
   const isAdmin = user?.role === 'admin'
@@ -94,19 +95,43 @@ export default function Dashboard({ user }) {
 
   async function fetchIdeas() {
     setLoading(true)
-    const { data, error } = await supabase.from('ideas').select('*')
+    const [{ data: ideasData, error }, { data: ratingsData }] = await Promise.all([
+      supabase.from('ideas').select('*'),
+      supabase.from('idea_ratings').select('idea_id, rating')
+    ])
     if (!error) {
-      setIdeas(data || [])
-      const r = {}
-      ;(data || []).forEach(i => { if (i.star_rating) r[i.id] = i.star_rating })
-      setRatings(r)
+      setIdeas(ideasData || [])
+      // Compute average per idea
+      const sums = {}, counts = {}
+      ;(ratingsData || []).forEach(r => {
+        sums[r.idea_id] = (sums[r.idea_id] || 0) + r.rating
+        counts[r.idea_id] = (counts[r.idea_id] || 0) + 1
+      })
+      const avgs = {}
+      Object.keys(sums).forEach(id => {
+        avgs[id] = Math.round((sums[id] / counts[id]) * 4) / 4 // round to nearest 0.25
+      })
+      setRatings(avgs)
+      setRatingCounts(counts)
     }
     setLoading(false)
   }
 
   async function handleRate(id, val) {
-    setRatings(prev => ({ ...prev, [id]: val }))
-    await supabase.from('ideas').update({ star_rating: val }).eq('id', id)
+    const userId = user?.id || 'anonymous'
+    // Upsert: one row per (idea_id, user_id)
+    await supabase.from('idea_ratings').upsert(
+      { idea_id: id, user_id: userId, rating: val },
+      { onConflict: 'idea_id,user_id' }
+    )
+    // Recompute average for this idea
+    const { data } = await supabase.from('idea_ratings').select('rating').eq('idea_id', id)
+    if (data && data.length > 0) {
+      const avg = data.reduce((s, r) => s + r.rating, 0) / data.length
+      const rounded = Math.round(avg * 4) / 4
+      setRatings(prev => ({ ...prev, [id]: rounded }))
+      setRatingCounts(prev => ({ ...prev, [id]: data.length }))
+    }
   }
 
   async function handleDelete(e, id) {
@@ -265,8 +290,13 @@ export default function Dashboard({ user }) {
                 </div>
               </div>
 
-              <div style={{ marginBottom: 10 }} onClick={e => e.stopPropagation()}>
+              <div style={{ marginBottom: 10, display: 'flex', alignItems: 'center', gap: 10 }} onClick={e => e.stopPropagation()}>
                 <StarRating ideaId={idea.id} value={ratings[idea.id] || 0} onChange={val => handleRate(idea.id, val)} />
+                {ratingCounts[idea.id] > 0 && (
+                  <span style={{ fontSize: 11, color: '#555' }}>
+                    {ratings[idea.id]?.toFixed(2)} avg · {ratingCounts[idea.id]} vote{ratingCounts[idea.id] > 1 ? 's' : ''}
+                  </span>
+                )}
               </div>
 
               <div style={s.miniScores}>
