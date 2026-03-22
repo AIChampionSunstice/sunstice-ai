@@ -12,16 +12,14 @@ export default function App() {
   return (
     <div style={{ minHeight: '100vh', background: '#0D0D0D' }}>
       <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;500;600;700&family=Inter:wght@300;400;500&display=swap" rel="stylesheet" />
-
       <div style={styles.topbar}>
         <div style={styles.logoRow}>
-          <div style={styles.logoMark}>S</div>
+          <img src="/logo.png" alt="Sunstice" style={{ width: 32, height: 32, borderRadius: 8, objectFit: 'cover', flexShrink: 0 }} />
           <div>
             <div style={styles.logoText}>Sunstice</div>
-            <div style={styles.logoSub}>Finance AI Hub</div>
+            <div style={styles.logoSub}>AI Idea Rating Hub</div>
           </div>
         </div>
-
         <div style={styles.tabs}>
           <button style={{ ...styles.tabBtn, ...(tab === 'submit' ? styles.tabActive : {}) }} onClick={() => setTab('submit')}>
             Submit an idea
@@ -30,14 +28,12 @@ export default function App() {
             Dashboard
           </button>
         </div>
-
         <div style={styles.userRow}>
           {user.role === 'admin' && <span style={styles.adminBadge}>Admin</span>}
           <span style={styles.userLabel}>{user.id}</span>
           <button style={styles.logoutBtn} onClick={() => setUser(null)}>Sign out</button>
         </div>
       </div>
-
       <div>
         {tab === 'submit' ? <Submit user={user} /> : <Dashboard user={user} />}
       </div>
@@ -48,7 +44,6 @@ export default function App() {
 const styles = {
   topbar: { background: '#0D0D0D', borderBottom: '0.5px solid #1E1E1E', padding: '12px 28px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap' },
   logoRow: { display: 'flex', alignItems: 'center', gap: 10 },
-  logoMark: { width: 32, height: 32, borderRadius: 8, background: '#D4A85A', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: "'Syne', sans-serif", fontSize: 16, fontWeight: 700, color: '#0D0D0D', flexShrink: 0 },
   logoText: { fontFamily: "'Syne', sans-serif", fontSize: 14, fontWeight: 700, color: '#fff', lineHeight: 1.1 },
   logoSub: { fontSize: 10, color: '#555' },
   tabs: { display: 'flex', gap: 4 },
