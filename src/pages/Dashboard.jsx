@@ -71,7 +71,7 @@ function StarRating({ ideaId, value, onChange, readonly = false }) {
           </div>
         )
       })}
-      {/* avg shown outside */
+      {/* avg shown outside */}
     </div>
   )
 }
