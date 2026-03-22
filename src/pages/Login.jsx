@@ -21,10 +21,10 @@ export default function Login({ onLogin }) {
     <div style={styles.bg}>
       <div style={styles.card}>
         <div style={styles.logoRow}>
-          <div style={styles.logoMark}>S</div>
+          <img src="/logo.png" alt="Sunstice" style={{ width: 40, height: 40, borderRadius: 10, objectFit: 'cover', flexShrink: 0 }} />
           <div>
             <div style={styles.logo}>Sunstice</div>
-            <div style={styles.sub}>Finance AI Hub</div>
+            <div style={styles.sub}>AI Idea Rating Hub</div>
           </div>
         </div>
         <form onSubmit={handleSubmit} style={styles.form}>
@@ -49,7 +49,6 @@ const styles = {
   bg: { minHeight: '100vh', background: '#0D0D0D', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: "'Inter', sans-serif", padding: '1rem' },
   card: { background: '#141414', border: '0.5px solid #2A2A2A', borderRadius: 16, padding: '2.5rem 2rem', width: '100%', maxWidth: 380 },
   logoRow: { display: 'flex', alignItems: 'center', gap: 12, marginBottom: '2rem' },
-  logoMark: { width: 40, height: 40, borderRadius: 10, background: '#D4A85A', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: "'Syne', sans-serif", fontSize: 20, fontWeight: 700, color: '#0D0D0D', flexShrink: 0 },
   logo: { fontFamily: "'Syne', sans-serif", fontSize: 18, fontWeight: 700, color: '#fff', lineHeight: 1.1 },
   sub: { fontSize: 12, color: '#555', marginTop: 2 },
   form: { display: 'flex', flexDirection: 'column', gap: '1rem' },
