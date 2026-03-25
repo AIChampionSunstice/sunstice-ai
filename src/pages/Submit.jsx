@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect } from 'react'
 import { supabase } from '../lib/supabase'
 
-const SYSTEM_PROMPT = `You are an AI Champion assistant at Sunstice, a SaaS supply chain software company. Your role is to help Finance team members identify and evaluate AI use cases through a conversation in English.
+const SYSTEM_PROMPT = `You are an AI Champion assistant at Sunstice, a SaaS supply chain software company. Your role is to help team members across all departments identify and evaluate AI use cases through a conversation in English.
 
 You will guide the user through exactly 4 steps, asking questions one at a time. Be concise and professional. No emojis, no excessive politeness.
 
@@ -39,12 +39,19 @@ FINAL REPORT — when you have enough info from all 4 steps, generate a JSON rep
   "title": "concise title",
   "description": "one sentence",
   "verdict": "Quick Win" or "Fort potentiel" or "A approfondir" or "Long-term Project",
-  "score_global": 0-100,
+  "score_global": 0,
   "score_roi": 0-100,
   "score_feasibility": 0-100,
   "score_security": 0-100,
   "score_cost": 0-100,
   "score_urgency": 0-100,
+  "score_justification": {
+    "roi": "1 sentence explaining why this ROI score",
+    "feasibility": "1 sentence explaining why this feasibility score",
+    "security": "1 sentence explaining why this security score",
+    "cost": "1 sentence explaining why this cost score",
+    "urgency": "1 sentence explaining why this urgency score"
+  },
   "tool_recommendation": "Dust AI" or "Microsoft Copilot M365" or "Dust AI + Copilot M365" or "Custom Development" or "No-code (Zapier/Make)",
   "cost_estimate": "e.g. < 1 week / near zero cost",
   "ipo_input": "description",
@@ -54,13 +61,14 @@ FINAL REPORT — when you have enough info from all 4 steps, generate a JSON rep
   "next_steps": ["step1", "step2", "step3"]
 }
 
-SCORING RULES:
-- score_roi: daily=90, weekly=70, monthly=50, quarterly=30, one-off=15. Add 20 if whole company, add 10 if multiple teams.
-- score_feasibility: structured data=80, partial=55, unstructured=35. Add 15 if Copilot or Dust covers it. Subtract 20 if requires complex custom dev.
+IMPORTANT: Always set score_global to 0 in the JSON — it will be recalculated automatically.
+
+SCORING RULES — apply these strictly to determine each score:
+- score_roi: daily=90, weekly=70, monthly=50, quarterly=30, one-off=15. Add 20 if whole company, add 10 if multiple teams. Cap at 100.
+- score_feasibility: structured data=80, partial=55, unstructured=35. Add 15 if Copilot or Dust covers it directly. Subtract 20 if requires complex custom dev. Cap at 100, min 0.
 - score_security: low error cost=90, medium=60, high/critical=25.
 - score_cost: Copilot/Dust=85, no-code=75, light custom=50, full custom=20.
-- score_urgency: same base as ROI weighted by people affected.
-- score_global: roi*0.30 + feasibility*0.25 + security*0.15 + cost*0.15 + urgency*0.15
+- score_urgency: same base as ROI but weighted by number of people affected. More people = higher urgency.
 
 RULES:
 - Always respond in English
@@ -76,10 +84,24 @@ I'm here to help you evaluate your automation ideas — it takes about 5 minutes
 
 To get started: what's a task you do regularly that you'd love to hand off to AI?`
 
+function computeGlobal(r) {
+  return Math.round(
+    (r.score_roi || 0) * 0.30 +
+    (r.score_feasibility || 0) * 0.25 +
+    (r.score_security || 0) * 0.15 +
+    (r.score_cost || 0) * 0.15 +
+    (r.score_urgency || 0) * 0.15
+  )
+}
+
 function parseReport(text) {
   const match = text.match(/<REPORT>([\s\S]*?)<\/REPORT>/)
   if (!match) return null
-  try { return JSON.parse(match[1].trim()) } catch { return null }
+  try {
+    const r = JSON.parse(match[1].trim())
+    r.score_global = computeGlobal(r)
+    return r
+  } catch { return null }
 }
 
 function cleanText(text) {
@@ -105,13 +127,13 @@ export default function Submit({ user }) {
   const [department, setDepartment] = useState('Finance')
   const [editingMsgIdx, setEditingMsgIdx] = useState(null)
   const [editingMsgVal, setEditingMsgVal] = useState('')
+  const [justifOpen, setJustifOpen] = useState(false)
   const bottomRef = useRef(null)
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages, loading])
 
-  // When report appears, clone it for editing
   useEffect(() => {
     if (report) setEditReport({ ...report })
   }, [report])
@@ -158,29 +180,19 @@ export default function Submit({ user }) {
     if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend() }
   }
 
-  // Edit a past user message and re-run from that point
-  const startEdit = (i, content) => {
-    setEditingMsgIdx(i)
-    setEditingMsgVal(content)
-  }
+  const startEdit = (i, content) => { setEditingMsgIdx(i); setEditingMsgVal(content) }
 
   const confirmEdit = async (i) => {
     const trimmed = editingMsgVal.trim()
     if (!trimmed) return
-    // Truncate history up to and including this message, replace with new value
     const truncated = [...messages.slice(0, i), { role: 'user', content: trimmed }]
     setMessages(truncated)
-    setEditingMsgIdx(null)
-    setEditingMsgVal('')
-    setReport(null)
-    setEditReport(null)
+    setEditingMsgIdx(null); setEditingMsgVal('')
+    setReport(null); setEditReport(null)
     await sendMessage(truncated)
   }
 
-  const cancelEdit = () => {
-    setEditingMsgIdx(null)
-    setEditingMsgVal('')
-  }
+  const cancelEdit = () => { setEditingMsgIdx(null); setEditingMsgVal('') }
 
   const saveIdea = async () => {
     if (!editReport || !author.trim()) return
@@ -218,6 +230,7 @@ export default function Submit({ user }) {
     setMessages([{ role: 'assistant', content: WELCOME }])
     setReport(null); setEditReport(null); setSaved(false)
     setInput(''); setAuthor(''); setEditingMsgIdx(null); setEditMode(false)
+    setJustifOpen(false)
   }
 
   const VSTYLE = {
@@ -239,17 +252,9 @@ export default function Submit({ user }) {
           {messages.map((m, i) => (
             <div key={i} style={{ ...s.row, justifyContent: m.role === 'user' ? 'flex-end' : 'flex-start' }}>
               {m.role === 'assistant' && <div style={s.avatar}>AI</div>}
-
-              {/* User message — editable */}
               {m.role === 'user' && editingMsgIdx === i ? (
                 <div style={{ maxWidth: '82%', display: 'flex', flexDirection: 'column', gap: 6 }}>
-                  <textarea
-                    style={{ ...s.editArea }}
-                    value={editingMsgVal}
-                    onChange={e => setEditingMsgVal(e.target.value)}
-                    rows={2}
-                    autoFocus
-                  />
+                  <textarea style={s.editArea} value={editingMsgVal} onChange={e => setEditingMsgVal(e.target.value)} rows={2} autoFocus />
                   <div style={{ display: 'flex', gap: 6, justifyContent: 'flex-end' }}>
                     <button style={s.editCancel} onClick={cancelEdit}>Cancel</button>
                     <button style={s.editConfirm} onClick={() => confirmEdit(i)}>Confirm & resend →</button>
@@ -259,7 +264,6 @@ export default function Submit({ user }) {
                 <div style={{ display: 'flex', flexDirection: 'column', alignItems: m.role === 'user' ? 'flex-end' : 'flex-start', gap: 3 }}>
                   <div style={{ ...s.bubble, ...(m.role === 'user' ? s.bubbleUser : s.bubbleBot) }}
                     dangerouslySetInnerHTML={{ __html: formatMessage(m.content) }} />
-                  {/* Edit button on user messages only, not after report */}
                   {m.role === 'user' && !report && (
                     <button style={s.editBtn} onClick={() => startEdit(i, m.content)}>edit</button>
                   )}
@@ -267,7 +271,6 @@ export default function Submit({ user }) {
               )}
             </div>
           ))}
-
           {loading && (
             <div style={{ ...s.row, justifyContent: 'flex-start' }}>
               <div style={s.avatar}>AI</div>
@@ -323,17 +326,33 @@ export default function Submit({ user }) {
             ))}
           </div>
 
-          {/* Scores — read only */}
+          {/* Scores + justification */}
           <div style={s.rCard}>
-            {[['ROI', editReport.score_roi], ['Feasibility', editReport.score_feasibility], ['Security', editReport.score_security], ['Cost', editReport.score_cost], ['Urgency', editReport.score_urgency]].map(([l, v]) => (
-              <div key={l} style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8 }}>
-                <span style={{ fontSize: 12, color: '#666', width: 72, flexShrink: 0 }}>{l}</span>
-                <div style={{ flex: 1, height: 4, background: '#2A2A2A', borderRadius: 2, overflow: 'hidden' }}>
-                  <div style={{ height: '100%', width: v + '%', background: v >= 70 ? '#D4A85A' : v >= 45 ? '#555' : '#E24B4A', borderRadius: 2 }} />
+            {[
+              ['ROI', editReport.score_roi, editReport.score_justification?.roi],
+              ['Feasibility', editReport.score_feasibility, editReport.score_justification?.feasibility],
+              ['Security', editReport.score_security, editReport.score_justification?.security],
+              ['Cost', editReport.score_cost, editReport.score_justification?.cost],
+              ['Urgency', editReport.score_urgency, editReport.score_justification?.urgency],
+            ].map(([l, v, justif]) => (
+              <div key={l} style={{ marginBottom: justifOpen && justif ? 12 : 8 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                  <span style={{ fontSize: 12, color: '#666', width: 72, flexShrink: 0 }}>{l}</span>
+                  <div style={{ flex: 1, height: 4, background: '#2A2A2A', borderRadius: 2, overflow: 'hidden' }}>
+                    <div style={{ height: '100%', width: v + '%', background: v >= 70 ? '#D4A85A' : v >= 45 ? '#555' : '#E24B4A', borderRadius: 2 }} />
+                  </div>
+                  <span style={{ fontSize: 12, fontWeight: 500, color: '#fff', width: 24, textAlign: 'right' }}>{v}</span>
                 </div>
-                <span style={{ fontSize: 12, fontWeight: 500, color: '#fff', width: 24, textAlign: 'right' }}>{v}</span>
+                {justifOpen && justif && (
+                  <div style={{ marginLeft: 82, marginTop: 4, fontSize: 11, color: '#666', lineHeight: 1.5, fontStyle: 'italic' }}>{justif}</div>
+                )}
               </div>
             ))}
+            {editReport.score_justification && (
+              <button style={s.justifBtn} onClick={() => setJustifOpen(j => !j)}>
+                {justifOpen ? 'Hide justification' : 'Why these scores?'}
+              </button>
+            )}
           </div>
 
           {/* Analysis */}
@@ -419,14 +438,15 @@ const s = {
   sendBtn: { width: 50, background: '#D4A85A', border: 'none', color: '#0D0D0D', fontSize: 20, fontWeight: 700, cursor: 'pointer' },
   reportWrap: { display: 'flex', flexDirection: 'column', gap: 10 },
   rCard: { background: '#141414', border: '0.5px solid #2A2A2A', borderRadius: 10, padding: '1.25rem' },
+  rTitle: { fontFamily: "'Syne',sans-serif", fontSize: 17, fontWeight: 700, color: '#fff', marginBottom: 4 },
+  rDesc: { fontSize: 13, color: '#888', lineHeight: 1.5 },
   editTitle: { fontFamily: "'Syne',sans-serif", fontSize: 17, fontWeight: 700, color: '#fff', background: 'transparent', border: 'none', borderBottom: '0.5px solid #333', outline: 'none', width: '100%', marginBottom: 8, padding: '2px 0' },
   editDesc: { fontFamily: "'Inter',sans-serif", fontSize: 13, color: '#888', background: 'transparent', border: 'none', borderBottom: '0.5px solid #2A2A2A', outline: 'none', width: '100%', resize: 'none', lineHeight: 1.5, padding: '2px 0' },
   editIpo: { fontFamily: "'Inter',sans-serif", fontSize: 12, color: '#CCC', background: '#111', border: '0.5px solid #2A2A2A', borderRadius: 4, outline: 'none', width: '100%', resize: 'vertical', padding: '6px 8px', lineHeight: 1.5 },
-  rTitle: { fontFamily: "'Syne',sans-serif", fontSize: 17, fontWeight: 700, color: '#fff', marginBottom: 4 },
-  rDesc: { fontSize: 13, color: '#888', lineHeight: 1.5 },
   bigScore: { fontFamily: "'Syne',sans-serif", fontSize: 38, fontWeight: 700, color: '#D4A85A', lineHeight: 1 },
   vBadge: { fontSize: 11, fontWeight: 500, padding: '4px 12px', borderRadius: 20, display: 'inline-block', marginTop: 6 },
   miniLabel: { fontSize: 10, color: '#555', textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 8 },
+  justifBtn: { fontFamily: "'Inter',sans-serif", fontSize: 11, color: '#555', background: 'none', border: 'none', cursor: 'pointer', padding: '4px 0', textDecoration: 'underline', marginTop: 4 },
   inp: { fontFamily: "'Inter',sans-serif", fontSize: 13, padding: '9px 12px', background: '#1E1E1E', border: '0.5px solid #333', borderRadius: 8, color: '#fff', width: '100%', appearance: 'none' },
   editToggleBtn: { fontFamily: "'Inter',sans-serif", fontSize: 11, color: '#D4A85A', background: 'none', border: '0.5px solid #D4A85A33', borderRadius: 6, padding: '4px 10px', cursor: 'pointer' },
   saveBtn: { width: '100%', fontFamily: "'Syne',sans-serif", fontSize: 14, fontWeight: 600, padding: 12, background: '#D4A85A', color: '#0D0D0D', border: 'none', borderRadius: 8, cursor: 'pointer' },
