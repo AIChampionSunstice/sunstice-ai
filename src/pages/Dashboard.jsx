@@ -182,8 +182,17 @@ export default function Dashboard({ user }) {
       }
     })
     .sort((a, b) => {
-      let va = sortField === 'star_rating' ? (ratings[a.id] ?? 0) : (a[sortField] ?? 0)
-      let vb = sortField === 'star_rating' ? (ratings[b.id] ?? 0) : (b[sortField] ?? 0)
+      if (sortField === 'star_rating') {
+        const ra = ratings[a.id] ?? 0
+        const rb = ratings[b.id] ?? 0
+        const ca = ratingCounts[a.id] ?? 0
+        const cb = ratingCounts[b.id] ?? 0
+        // Primary: sort by avg rating, secondary: sort by vote count if equal
+        if (rb !== ra) return sortDir === 'desc' ? rb - ra : ra - rb
+        return sortDir === 'desc' ? cb - ca : ca - cb
+      }
+      let va = a[sortField] ?? 0
+      let vb = b[sortField] ?? 0
       if (typeof va === 'string') return sortDir === 'desc' ? vb.localeCompare(va) : va.localeCompare(vb)
       return sortDir === 'desc' ? vb - va : va - vb
     })
