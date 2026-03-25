@@ -3,6 +3,15 @@ import { useState } from 'react'
 const CREDENTIALS = [
   { id: 'Sunstice2026', password: 'SunsticeAI', role: 'user' },
   { id: 'SunsticeAdmin', password: 'Admin2026', role: 'admin' },
+  { id: 'SunsticeRH', password: 'SunsticeAI', role: 'user' },
+  { id: 'SunsticeIT', password: 'SunsticeAI', role: 'user' },
+  { id: 'SunsticeCloud', password: 'SunsticeAI', role: 'user' },
+  { id: 'SunsticeSupport', password: 'SunsticeAI', role: 'user' },
+  { id: 'SunsticeCS', password: 'SunsticeAI', role: 'user' },
+  { id: 'SunsticePresales', password: 'SunsticeAI', role: 'user' },
+  { id: 'SunsticeSales', password: 'SunsticeAI', role: 'user' },
+  { id: 'SunsticeConsulting', password: 'SunsticeAI', role: 'user' },
+  { id: 'SunsticeR&D', password: 'SunsticeAI', role: 'user' },
 ]
 
 export default function Login({ onLogin }) {
