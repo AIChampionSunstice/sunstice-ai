@@ -51,7 +51,7 @@ MICROSOFT COPILOT M365 → best for: tasks inside Teams, Outlook, Excel, PowerPo
 
 DUST AI + COPILOT M365 → both needed: document analysis AND M365 workflow automation.
 
-N8N / NO-CODE → best for: automating workflows between existing tools (Salesforce → Jira, Excel → email alerts, etc.). No AI reasoning needed, just automation logic. Cost-effective for Sunstice budget.
+N8N → best for: automating workflows between existing tools (Salesforce → Jira, Excel → email alerts, etc.). No AI reasoning needed, just automation logic. Cost-effective for Sunstice budget.
 
 CUSTOM DEVELOPMENT → only if: complex ERP integration (Cegid, Sciforma, Salesforce APIs), multi-system pipelines, or real-time data processing. Most expensive — justify carefully given €150k budget.
 
@@ -75,7 +75,7 @@ FINAL REPORT — when you have enough info from all 4 steps, generate a JSON rep
     "cost": "1 sentence explaining this cost score relative to the ~€150k budget",
     "urgency": "1 sentence explaining this urgency score given the number of people affected at Sunstice"
   },
-  "tool_recommendation": "Dust AI" or "Microsoft Copilot M365" or "Dust AI + Copilot M365" or "n8n / No-code" or "Custom Development",
+  "tool_recommendation": "Dust AI" or "Microsoft Copilot M365" or "Dust AI + Copilot M365" or "n8n" or "Custom Development",
   "cost_estimate": "estimated effort and cost in Sunstice context",
   "ipo_input": "description",
   "ipo_process": "description",
