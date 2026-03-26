@@ -16,7 +16,7 @@ const FILTER_OPTS = [
   { key: 'company_wide',  label: 'Whole company' },
   { key: 'copilot',       label: 'Copilot M365' },
   { key: 'dust',          label: 'Dust AI' },
-  { key: 'n8n',           label: 'n8n / No-code' },
+  { key: 'n8n',           label: 'n8n' },
   { key: 'custom',        label: 'Dev custom' },
   { key: 'high_security', label: 'High security' },
   { key: 'low_cost',      label: 'Low cost' },
@@ -402,7 +402,7 @@ function getToolStyle(tool) {
   const t = tool.toLowerCase()
   if (t.includes('copilot')) return { background: '#0D1A2E', color: '#6AABFF' }
   if (t.includes('dust'))    return { background: '#1A2E1A', color: '#7BC67E' }
-  if (t.includes('n8n') || t.includes('no-code')) return { background: '#1A1A2E', color: '#9B8FFF' }
+  if (t.includes('n8n') || t.includes('no-code') || t.includes('n8n')) return { background: '#1A1A2E', color: '#9B8FFF' }
   if (t.includes('custom') || t.includes('mesure')) return { background: '#2A1F0D', color: '#D4A85A' }
   return {}
 }
