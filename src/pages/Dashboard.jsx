@@ -16,6 +16,7 @@ const FILTER_OPTS = [
   { key: 'company_wide',  label: 'Whole company' },
   { key: 'copilot',       label: 'Copilot M365' },
   { key: 'dust',          label: 'Dust AI' },
+  { key: 'n8n',           label: 'n8n / No-code' },
   { key: 'custom',        label: 'Dev custom' },
   { key: 'high_security', label: 'High security' },
   { key: 'low_cost',      label: 'Low cost' },
@@ -175,6 +176,7 @@ export default function Dashboard({ user }) {
         case 'company_wide':  return idea.q_scope?.includes('entreprise') || idea.q_scope?.includes('company') || idea.q_scope?.includes('départements')
         case 'copilot':       return idea.tool_recommendation?.toLowerCase().includes('copilot')
         case 'dust':          return idea.tool_recommendation?.toLowerCase().includes('dust')
+        case 'n8n':           return idea.tool_recommendation?.toLowerCase().includes('n8n') || idea.tool_recommendation?.toLowerCase().includes('no-code')
         case 'custom':        return idea.tool_recommendation?.toLowerCase().includes('custom') || idea.tool_recommendation?.toLowerCase().includes('mesure')
         case 'high_security': return idea.score_security >= 70
         case 'low_cost':      return idea.score_cost >= 70
@@ -400,6 +402,7 @@ function getToolStyle(tool) {
   const t = tool.toLowerCase()
   if (t.includes('copilot')) return { background: '#0D1A2E', color: '#6AABFF' }
   if (t.includes('dust'))    return { background: '#1A2E1A', color: '#7BC67E' }
+  if (t.includes('n8n') || t.includes('no-code')) return { background: '#1A1A2E', color: '#9B8FFF' }
   if (t.includes('custom') || t.includes('mesure')) return { background: '#2A1F0D', color: '#D4A85A' }
   return {}
 }
