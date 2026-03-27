@@ -7,11 +7,12 @@ const CREDENTIALS = [
   { id: 'SunsticeIT', password: 'SunsticeAI', role: 'user' },
   { id: 'SunsticeCloud', password: 'SunsticeAI', role: 'user' },
   { id: 'SunsticeSupport', password: 'SunsticeAI', role: 'user' },
-  { id: 'SunsticeCS', password: 'SunsticeAI', role: 'user' },
+  { id: 'SunsticeCX', password: 'SunsticeAI', role: 'user' },
   { id: 'SunsticePresales', password: 'SunsticeAI', role: 'user' },
   { id: 'SunsticeSales', password: 'SunsticeAI', role: 'user' },
   { id: 'SunsticeConsulting', password: 'SunsticeAI', role: 'user' },
   { id: 'SunsticeR&D', password: 'SunsticeAI', role: 'user' },
+  { id: 'SunsticeMKT', password: 'SunsticeAI', role: 'user' },
 ]
 
 export default function Login({ onLogin }) {
